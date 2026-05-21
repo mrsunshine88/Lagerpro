@@ -26,7 +26,9 @@ from flask import Flask, request, jsonify, render_template, send_file, session
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'database.db')
+# --- ÄNDRING 1: ANVÄND MILJÖVARIABELN FÖR RAILWAY VOLUME OM DEN FINNS ---
+# Om DB_PATH finns inställd i Railway (t.ex. /data/database.db) använder vi den, annars lokal mapp.
+DB_PATH = os.environ.get('DB_PATH', os.path.join(os.path.dirname(__file__), 'database.db'))
 DEFAULT_PASSWORD = "lager"
 
 def get_db():
@@ -78,7 +80,6 @@ def init_db():
         ''')
         
         # Create settings table
-        # Create settings table
         conn.execute('''
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -104,7 +105,6 @@ def init_db():
         ''')
         
         # --- DATABASE MIGRATIONS ---
-        # Add new price columns if variants table already existed without them
         try:
             conn.execute("ALTER TABLE variants ADD COLUMN purchase_price REAL DEFAULT 0.0")
         except sqlite3.OperationalError:
@@ -119,12 +119,32 @@ def init_db():
 
 init_db()
 
+# --- ÄNDRING 2: AUTOMATISK IMPORT AV SEED-DATA VID START I MOLNET ---
+# Detta körs bara om databasen är helt tom (inga produkter finns registrerade),
+# vilket gör att den fyller din Volume första gången appen startar på Railway!
+try:
+    with get_db() as test_conn:
+        prod_count = test_conn.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+        # Om det är en helt ny databas eller bara innehåller placeholder-produkter, kör vi importen
+        if prod_count <= 1:
+            print("[SYSTEM] Tom databas upptäckt. Försöker läsa in seed_full_lager.py...")
+            try:
+                import seed_full_lager
+                seed_full_lager.seed_full_lager()
+                print("[SYSTEM] Alla 240 par skor har laddats in i databasen automatiskt!")
+            except ImportError:
+                print("[VARNING] Kunde inte hitta seed_full_lager.py i denna miljö.")
+            except Exception as seed_err:
+                print(f"[FEL] Fel vid automatisk inläsning av skor: {seed_err}")
+except Exception as e:
+    print(f"[SYSTEM] Kunde inte kontrollera eller ladda seed-data vid start: {e}")
+
+
 # --- HELPER FUNCTIONS ---
 def check_auth():
     if session.get('authenticated') is True:
         return True
     
-    # Allow authentication token fallback if needed
     auth_header = request.headers.get('Authorization')
     if auth_header:
         with get_db() as conn:
@@ -166,7 +186,6 @@ def login():
     email = data.get('email', '').strip().lower()
     password = data.get('password', '').strip()
     
-    # Support typo version in login check
     lookup_email = email
     if email == 'apersson508@gmai..com':
         lookup_email = 'apersson508@gmail.com'
@@ -202,12 +221,11 @@ def get_products():
         if user_role == 'admin' or allowed_projects == 'all':
             products = conn.execute("SELECT * FROM products ORDER BY id DESC").fetchall()
         else:
-            # Standard user restricted project filtering
             projects_list = [p.strip() for p in allowed_projects.split(',') if p.strip()]
             placeholders = ','.join('?' for _ in projects_list)
             
             if not projects_list:
-                return jsonify([]) # No allowed projects assigned yet
+                return jsonify([])
                 
             query = f"SELECT * FROM products WHERE category IN ({placeholders}) ORDER BY id DESC"
             products = conn.execute(query, projects_list).fetchall()
@@ -246,7 +264,6 @@ def project_discount_endpoint():
             discount = float(row[0]) if row else 0.0
             return jsonify({"project": project, "discount_percent": discount})
             
-    # POST - Admin only
     if session.get('user_role') != 'admin':
         return jsonify({"error": "Forbidden"}), 403
         
@@ -256,17 +273,12 @@ def project_discount_endpoint():
     
     with get_db() as conn:
         cursor = conn.cursor()
-        
-        # Save setting
         cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (f"discount_{project}", str(discount)))
-        
-        # Get all products belonging to this project
         cursor.execute("SELECT id FROM products WHERE category = ?", (project,))
         product_ids = [row[0] for row in cursor.fetchall()]
         
         if product_ids:
             for p_id in product_ids:
-                # Update selling_price based on original_price
                 cursor.execute("""
                     UPDATE variants 
                     SET selling_price = CASE 
@@ -293,7 +305,6 @@ def project_investment_endpoint():
             investment = float(row[0]) if row and row[0] else 0.0
             return jsonify({"project": project, "investment": investment})
             
-    # POST - Admin only
     if session.get('user_role') != 'admin':
         return jsonify({"error": "Forbidden"}), 403
         
@@ -303,12 +314,10 @@ def project_investment_endpoint():
     
     with get_db() as conn:
         cursor = conn.cursor()
-        # Save setting
         cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (f"investment_{project}", str(investment)))
         conn.commit()
         
     return jsonify({"success": True, "message": f"Saved {investment} kr investment for {project} successfully!", "investment": investment})
-
 
 @app.route('/api/products', methods=['POST'])
 def add_product():
@@ -353,7 +362,6 @@ def add_product():
                 (product_id, sku, stock, size, color, p_price, s_price, orig_price)
             )
             
-            # Log initial stock as purchase transaction
             if stock > 0:
                 var_id = cursor.lastrowid
                 cursor.execute(
@@ -376,8 +384,6 @@ def update_stock(variant_id):
     
     with get_db() as conn:
         cursor = conn.cursor()
-        
-        # Get current variant details
         variant = cursor.execute("SELECT * FROM variants WHERE id = ?", (variant_id,)).fetchone()
         if not variant:
             return jsonify({"error": "Variant hittades inte"}), 404
@@ -393,15 +399,12 @@ def update_stock(variant_id):
             
         cursor.execute("UPDATE variants SET stock = ? WHERE id = ?", (new_stock, variant_id))
         
-        # Log Transaction
         if change < 0:
-            # Sales transaction
             cursor.execute(
                 "INSERT INTO transactions (variant_id, type, quantity, purchase_price, selling_price) VALUES (?, 'sale', ?, ?, ?)",
                 (variant_id, abs(change), variant['purchase_price'], variant['selling_price'])
             )
         elif change > 0:
-            # Restock / Purchase transaction
             cursor.execute(
                 "INSERT INTO transactions (variant_id, type, quantity, purchase_price, selling_price) VALUES (?, 'purchase', ?, ?, ?)",
                 (variant_id, change, variant['purchase_price'], variant['selling_price'])
@@ -423,8 +426,6 @@ def pos_checkout():
         
     with get_db() as conn:
         cursor = conn.cursor()
-        
-        # Verify stock levels for all items first
         for item in items:
             var_id = int(item['variantId'])
             qty = int(item['quantity'])
@@ -435,16 +436,12 @@ def pos_checkout():
             if variant['stock'] < qty:
                 return jsonify({"error": f"Lagersaldo otillräckligt för {variant['name']}."}), 400
                 
-        # Perform updates
         for item in items:
             var_id = int(item['variantId'])
             qty = int(item['quantity'])
             
             variant = cursor.execute("SELECT purchase_price, selling_price, stock FROM variants WHERE id = ?", (var_id,)).fetchone()
             new_stock = max(0, variant['stock'] - qty)
-            
-            # Use the actual selling_price from the request if provided (order-level discount override)
-            # This ensures economics tracks what the customer actually paid
             actual_selling_price = float(item.get('selling_price', variant['selling_price']))
             
             cursor.execute("UPDATE variants SET stock = ? WHERE id = ?", (new_stock, var_id))
@@ -539,18 +536,14 @@ def get_analytics():
     with get_db() as conn:
         cursor = conn.cursor()
         
-        # 1. Total Stock Value (Inköpskostnad för nuvarande lager)
         stock_val_row = cursor.execute("SELECT SUM(stock * purchase_price) FROM variants").fetchone()
         total_stock_cost = stock_val_row[0] if stock_val_row[0] else 0.0
         
-        # 2. Total Potential Sales Value (Försäljningsvärde för nuvarande lager)
         potential_sales_row = cursor.execute("SELECT SUM(stock * selling_price) FROM variants").fetchone()
         potential_sales_val = potential_sales_row[0] if potential_sales_row[0] else 0.0
         
-        # 3. Potential Profit in Stock (Potentiell vinst i nuvarande lager)
         potential_profit = potential_sales_val - total_stock_cost
         
-        # 4. Total Package Investments (Faktiska historiska paketinköp + Klumpsumma investeringar)
         cursor.execute("SELECT value FROM settings WHERE key LIKE 'investment_%'")
         settings_investments = sum(float(row[0]) for row in cursor.fetchall() if row[0])
         
@@ -560,18 +553,14 @@ def get_analytics():
             total_inv_row = cursor.execute("SELECT SUM(quantity * purchase_price) FROM transactions WHERE type = 'purchase'").fetchone()
             total_investment = total_inv_row[0] if total_inv_row[0] else 0.0
         
-        # 5. Total Revenues (Faktiska historiska försäljningar)
         total_rev_row = cursor.execute("SELECT SUM(quantity * selling_price) FROM transactions WHERE type = 'sale'").fetchone()
         total_revenue = total_rev_row[0] if total_rev_row[0] else 0.0
         
-        # 6. Actual Net Cash Profit (Likviditet: Försäljningar - Inköpskostnad)
         net_profit = total_revenue - total_investment
         
-        # --- SALES METRICS PER PERIOD ---
-        # We compute sales (revenue, cost, profit) for Today, This Week, and This Month
         periods = {
             'today': "created_at >= date('now', 'localtime')",
-            'week': "created_at >= date('now', 'weekday 0', '-7 days')", # start of current week
+            'week': "created_at >= date('now', 'weekday 0', '-7 days')",
             'month': "created_at >= date('now', 'start of month')"
         }
         
@@ -588,12 +577,10 @@ def get_analytics():
             rev = row['revenue'] if row['revenue'] else 0.0
             cst = row['cost'] if row['cost'] else 0.0
             
-            # If lump-sum investment mode and purchase_price=0 on transactions,
-            # calculate a proportional cost share: (period_revenue / total_revenue) * total_investment
             if cst == 0.0 and settings_investments > 0 and total_revenue > 0:
                 cst = (rev / total_revenue) * settings_investments
             elif cst == 0.0 and settings_investments > 0 and total_revenue == 0:
-                cst = 0.0  # No sales yet, nothing to proportion
+                cst = 0.0
             
             prof = rev - cst
             margin = (prof / rev * 100) if rev > 0 else 0.0
@@ -605,7 +592,6 @@ def get_analytics():
                 "margin": margin
             }
             
-        # Recent Sales History
         recent_sales_query = '''
             SELECT t.quantity, t.selling_price, t.purchase_price, t.created_at,
                    v.size, v.color, p.name as model_name, p.category
@@ -618,7 +604,6 @@ def get_analytics():
         '''
         sales_history = cursor.execute(recent_sales_query).fetchall()
         
-        # 7. Project Summaries (Breakdown per Category/Project)
         project_summaries = []
         categories_query = "SELECT DISTINCT category FROM products"
         cats = cursor.execute(categories_query).fetchall()
@@ -626,7 +611,6 @@ def get_analytics():
         for cat_row in cats:
             cat_name = cat_row['category']
             
-            # Stock metrics for this project
             stock_row = cursor.execute('''
                 SELECT SUM(v.stock * v.purchase_price) as cost,
                        SUM(v.stock * v.selling_price) as potential
@@ -637,13 +621,11 @@ def get_analytics():
             cat_stock_cost = stock_row['cost'] if stock_row['cost'] else 0.0
             cat_stock_potential = stock_row['potential'] if stock_row['potential'] else 0.0
             
-            # Total Stock Count
             count_row = cursor.execute('''
                 SELECT SUM(v.stock) FROM variants v JOIN products p ON v.product_id = p.id WHERE p.category = ?
             ''', (cat_name,)).fetchone()
             cat_stock_count = count_row[0] if count_row[0] else 0
             
-            # Investment for this project
             setting_inv = cursor.execute("SELECT value FROM settings WHERE key = ?", (f"investment_{cat_name}",)).fetchone()
             if setting_inv and setting_inv[0]:
                 cat_investment = float(setting_inv[0])
@@ -657,7 +639,6 @@ def get_analytics():
                 ''', (cat_name,)).fetchone()
                 cat_investment = inv_row[0] if inv_row[0] else 0.0
             
-            # Revenue for this project
             rev_row = cursor.execute('''
                 SELECT SUM(t.quantity * t.selling_price) 
                 FROM transactions t
@@ -887,7 +868,6 @@ def confirm_import():
                     timestamp = datetime.now().strftime("%f")[-3:]
                     sku = f"LGR-{clean_name}-{clean_size}-{clean_color}-{timestamp}"
                     
-                    # Check if exact variant exists
                     cursor.execute(
                         "SELECT id FROM variants WHERE product_id = ? AND size = ? AND color = ?",
                         (product_id, size, color)
@@ -895,21 +875,18 @@ def confirm_import():
                     var_row = cursor.fetchone()
                     
                     if var_row:
-                        # Update stock & pricing
                         cursor.execute(
                             "UPDATE variants SET stock = stock + ?, purchase_price = ?, selling_price = ? WHERE id = ?",
                             (stock, p_price, s_price, var_row[0])
                         )
                         var_id = var_row[0]
                     else:
-                        # Insert variant
                         cursor.execute(
                             "INSERT INTO variants (product_id, sku, stock, size, color, purchase_price, selling_price) VALUES (?, ?, ?, ?, ?, ?, ?)",
                             (product_id, sku, stock, size, color, p_price, s_price)
                         )
                         var_id = cursor.lastrowid
                         
-                    # Log Transaction
                     if stock > 0:
                         cursor.execute(
                             "INSERT INTO transactions (variant_id, type, quantity, purchase_price, selling_price) VALUES (?, 'purchase', ?, ?, ?)",
@@ -1003,7 +980,6 @@ def delete_user(user_id):
         return jsonify({"error": "Forbidden"}), 403
         
     with get_db() as conn:
-        # Prevent self deletion
         current_admin = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
         if current_admin and user_id == session.get('user_id'):
             return jsonify({"error": "Du kan inte radera ditt eget inloggade konto."}), 400
@@ -1031,9 +1007,7 @@ def create_project():
     if not project_name:
         return jsonify({"error": "Projektnamn kan inte vara tomt."}), 400
         
-    # To register a new project without any items, we create a placeholder product in this category
     with get_db() as conn:
-        # Check if already exists
         exists = conn.execute("SELECT id FROM products WHERE category = ?", (project_name,)).fetchone()
         if not exists:
             conn.execute(
@@ -1041,7 +1015,6 @@ def create_project():
                 (f"Startprodukt ({project_name})", project_name, "Placeholder för nyskapat projekt.")
             )
             product_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-            # Create a placeholder variant with 0 stock so it behaves nicely
             conn.execute(
                 "INSERT INTO variants (product_id, sku, stock, size, color, purchase_price, selling_price) VALUES (?, 'PLACEHOLDER', 0, 'Standard', 'Universal', 0, 0)",
                 (product_id,)
@@ -1050,7 +1023,6 @@ def create_project():
             
     return jsonify({"success": True})
 
-# Printing gorgeous banner at python server startup
 print("\n" + "="*60)
 print("              LAGERPRO SERVER ÄR IGÅNG!")
 print("="*60)
