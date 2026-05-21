@@ -1,0 +1,11 @@
+# LagerPRO - Gitignore
+__pycache__/
+*.py[cod]
+*.pyc
+.env
+*.bat
+database.db
+seed_*.py
+migrate_*.py
+test_*.py
+*.log

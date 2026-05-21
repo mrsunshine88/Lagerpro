@@ -1,0 +1,1031 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LAGERPRO – Premium Lager & Logistik</title>
+    
+    <!-- Google Fonts: Outfit for titles, Inter for body -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- HTML5 QR Code CDN for Mobile Barcode Scanning -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="dark-theme">
+
+    {% if require_login %}
+    <!-- --- LOGIN WALL --- -->
+    <div id="login-container" class="glass-panel" style="max-width:400px; width:90%; padding:30px; margin: 100px auto;">
+        <div class="login-header">
+            <div class="logo">
+                <i data-lucide="package-search" class="logo-icon"></i>
+                <h1>LAGER<span>PRO</span></h1>
+            </div>
+            <p style="font-size:0.85rem; color:var(--text-secondary); margin-top:8px;">Detta system är privat och stängt. Logga in med dina administratörsuppgifter.</p>
+        </div>
+        <div class="login-form">
+            <div class="input-group" style="margin-bottom: 15px;">
+                <i data-lucide="mail" class="input-icon"></i>
+                <input type="email" id="login-email" placeholder="Din e-postadress..." value="apersson508@gmail.com" required style="width:100%;">
+            </div>
+            <div class="input-group" style="margin-bottom: 20px;">
+                <i data-lucide="lock" class="input-icon"></i>
+                <input type="password" id="login-password" placeholder="Ange lösenord..." required style="width:100%;">
+            </div>
+            <button id="login-btn" class="btn btn-primary btn-full">
+                <span>Logga in</span>
+                <i data-lucide="arrow-right"></i>
+            </button>
+            <p id="login-error" class="error-msg hide" style="margin-top:15px; text-align:center;"></p>
+        </div>
+    </div>
+    {% else %}
+    <!-- --- APP CONTAINER --- -->
+    <div id="app-container">
+        
+        <!-- --- HEADER --- -->
+        <header class="glass-header">
+            <div class="header-left">
+                <div class="logo">
+                    <i data-lucide="package-search" class="logo-icon animate-float"></i>
+                    <h1>LAGER<span>PRO</span></h1>
+                </div>
+                
+                <!-- Tab Controls in Header -->
+                <nav class="nav-tabs-wrapper">
+                    <button id="tab-hub-btn" class="nav-tab active">
+                        <i data-lucide="home"></i>
+                        <span>Startmeny</span>
+                    </button>
+                    <button id="tab-pos-btn" class="nav-tab">
+                        <i data-lucide="shopping-cart"></i>
+                        <span>Kassa (POS)</span>
+                    </button>
+                    <button id="tab-inventory-btn" class="nav-tab">
+                        <i data-lucide="layout-grid"></i>
+                        <span>Lagerregister</span>
+                    </button>
+                    <button id="tab-analytics-btn" class="nav-tab admin-only hide">
+                        <i data-lucide="trending-up"></i>
+                        <span>Ekonomi &amp; Statistik</span>
+                    </button>
+                </nav>
+            </div>
+            
+            <div class="header-right">
+                <button id="scan-shortcut-btn" class="btn btn-accent btn-sm animate-pulse-accent">
+                    <i data-lucide="scan-line"></i>
+                    <span>Skanna streckkod</span>
+                </button>
+                <button id="admin-panel-btn" class="btn btn-ghost btn-icon admin-only hide" title="Admin-panel" style="color:var(--color-accent);">
+                    <i data-lucide="shield-check"></i>
+                </button>
+                <button id="settings-btn" class="btn btn-ghost btn-icon" title="Inställningar">
+                    <i data-lucide="settings"></i>
+                </button>
+                <button id="logout-btn" class="btn btn-ghost btn-icon hide" title="Logga ut">
+                    <i data-lucide="log-out"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- --- MAIN CONTENT --- -->
+        <main class="content-wrapper">
+            
+            <!-- ==================== TAB 0: WELCOME HUB CONTENT ==================== -->
+            <div id="tab-hub-content" class="tab-pane">
+                <div class="welcome-banner glass-card" style="padding:40px; text-align:center; margin-bottom:30px; background:linear-gradient(135deg, rgba(139,92,246,0.1) 0%, rgba(5,7,12,0.4) 100%); border:1px solid var(--border-light);">
+                    <i data-lucide="package-search" class="logo-icon animate-float" style="width:60px; height:60px; color:var(--color-primary); margin-bottom:15px;"></i>
+                    <h2 style="font-size:2rem; margin:0 0 10px 0; font-weight:800; letter-spacing:-0.5px;">Välkommen till LAGER<span>PRO</span></h2>
+                    <p style="font-size:1rem; color:var(--text-secondary); margin:0 auto; max-width:600px;">
+                        Här har du en total koncernöversikt och lagerstyrning. Välj en funktion nedan för att komma igång.
+                    </p>
+                    <div style="margin-top:20px; display:inline-flex; align-items:center; gap:8px; padding:6px 12px; background:rgba(255,255,255,0.03); border:1px solid var(--border-light); border-radius:30px;">
+                        <span class="color-dot" style="background-color:var(--color-success); width:8px; height:8px;"></span>
+                        <span style="font-size:0.8rem; color:var(--text-secondary);">Inloggad som: <strong id="hub-user-email" style="color:var(--text-primary);">...</strong></span>
+                        <span id="hub-user-role-badge" class="badge" style="font-size:0.7rem; padding:2px 8px;">...</span>
+                    </div>
+                </div>
+
+                <div class="hub-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap:20px;">
+                    
+                    <!-- HUB CARD 0: KASSA (POS) -->
+                    <div class="glass-card hub-card" style="padding:25px; display:flex; flex-direction:column; justify-content:space-between; height:100%; transition:all 0.3s ease;">
+                        <div>
+                            <div style="width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:rgba(139,92,246,0.12); color:var(--color-primary); margin-bottom:20px;">
+                                <i data-lucide="shopping-cart" style="width:24px; height:24px;"></i>
+                            </div>
+                            <h3 style="margin:0 0 8px 0; font-size:1.2rem; font-weight:700;">Kassa (POS)</h3>
+                            <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:20px;">Sälj skor snabbt och enkelt. Välj skor, ange antal och slutför köp direkt.</p>
+                        </div>
+                        <button onclick="switchTab('pos')" class="btn btn-primary btn-full">
+                            <span>Öppna kassa</span>
+                            <i data-lucide="arrow-right"></i>
+                        </button>
+                    </div>
+
+                    <!-- HUB CARD 1: LAGERREGISTER -->
+                    <div class="glass-card hub-card" style="padding:25px; display:flex; flex-direction:column; justify-content:space-between; height:100%; transition:all 0.3s ease;">
+                        <div>
+                            <div style="width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:rgba(99,102,241,0.12); color:#818cf8; margin-bottom:20px;">
+                                <i data-lucide="layout-grid" style="width:24px; height:24px;"></i>
+                            </div>
+                            <h3 style="margin:0 0 8px 0; font-size:1.2rem; font-weight:700;">Lagerregister</h3>
+                            <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:20px;">Sök i lagret, se storlekar och registrera försäljningar.</p>
+                            
+                            <div style="margin-bottom:20px;">
+                                <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:8px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Öppna direkt i projekt:</label>
+                                <select id="hub-project-select" class="custom-select" style="width:100%; padding:8px;">
+                                    <option value="all">Alla projekt / Skoarter</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button onclick="openHubProject()" class="btn btn-secondary btn-full" style="border-color:#818cf8; color:#818cf8;">
+                            <span>Öppna lager</span>
+                            <i data-lucide="arrow-right"></i>
+                        </button>
+                    </div>
+
+                    <!-- HUB CARD 2: EKONOMI & STATISTIK (ADMIN ONLY) -->
+                    <div class="glass-card hub-card admin-only hide" style="padding:25px; display:flex; flex-direction:column; justify-content:space-between; height:100%; transition:all 0.3s ease;">
+                        <div>
+                            <div style="width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:rgba(16,185,129,0.12); color:var(--color-success); margin-bottom:20px;">
+                                <i data-lucide="trending-up" style="width:24px; height:24px;"></i>
+                            </div>
+                            <h3 style="margin:0 0 8px 0; font-size:1.2rem; font-weight:700;">Ekonomi &amp; Statistik</h3>
+                            <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:20px;">Följ upp kostnader, vinst, marginaler och se din break-even kalkyl för alla partier.</p>
+                        </div>
+                        <button onclick="switchTab('analytics')" class="btn btn-secondary btn-full" style="border-color:var(--color-success); color:var(--color-success);">
+                            <span>Visa ekonomi</span>
+                            <i data-lucide="arrow-right"></i>
+                        </button>
+                    </div>
+
+                    <!-- HUB CARD 3: ADMIN PANEL (ADMIN ONLY) -->
+                    <div class="glass-card hub-card admin-only hide" style="padding:25px; display:flex; flex-direction:column; justify-content:space-between; height:100%; transition:all 0.3s ease;">
+                        <div>
+                            <div style="width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:rgba(235,179,8,0.12); color:var(--color-warning); margin-bottom:20px;">
+                                <i data-lucide="shield-check" style="width:24px; height:24px;"></i>
+                            </div>
+                            <h3 style="margin:0 0 8px 0; font-size:1.2rem; font-weight:700;">Administratörspanel</h3>
+                            <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:20px;">Skapa användare, byt lösenord, tilldela projektbehörigheter samt skapa nya projekt.</p>
+                        </div>
+                        <button onclick="openAdminPanel()" class="btn btn-secondary btn-full" style="border-color:var(--color-warning); color:var(--color-warning);">
+                            <span>Hantera system</span>
+                            <i data-lucide="arrow-right"></i>
+                        </button>
+                    </div>
+
+
+                </div>
+            </div>
+
+            <!-- ==================== TAB 1.5: KASSA (POS) CONTENT ==================== -->
+            <div id="tab-pos-content" class="tab-pane">
+                <div class="pos-wrapper" style="display:grid; grid-template-columns: 2fr 1fr; gap: 20px; height: calc(100vh - 150px); margin-top: 10px;">
+                    <!-- LEFT COLUMN: PRODUCT SELECTOR -->
+                    <div class="pos-products-panel glass-card" style="padding: 20px; display:flex; flex-direction:column; gap: 15px; overflow-y: auto;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h2 style="margin:0; font-size:1.3rem;">Kassa &amp; Snabbköp</h2>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <button onclick="openScannerModal()" class="btn btn-accent btn-sm" title="Skanna streckkod" style="display:flex; align-items:center; gap:6px;">
+                                    <i data-lucide="scan-line" style="width:14px; height:14px;"></i>
+                                    <span>Skanna</span>
+                                </button>
+                                <select id="pos-category-filter" class="custom-select" style="min-width:150px; padding:6px 12px; font-size:0.8rem;">
+                                    <option value="all">Alla kategorier</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="search-bar" style="margin:0;">
+                            <i data-lucide="search" class="search-icon"></i>
+                            <input type="text" id="pos-search-input" placeholder="Sök sko efter namn eller kategori..." style="padding: 8px 12px 8px 36px; font-size:0.85rem;">
+                        </div>
+                        
+                        <div id="pos-products-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px;">
+                            <!-- Injected dynamically -->
+                        </div>
+                    </div>
+                    
+                    <!-- RIGHT COLUMN: SHOPPING CART -->
+                    <div class="pos-cart-panel glass-card" style="padding: 20px; display:flex; flex-direction:column; justify-content:space-between; height: 100%; overflow: hidden;">
+                        <div style="display:flex; flex-direction:column; height: 100%; overflow: hidden;">
+                            <div style="border-bottom:1px solid var(--border-light); padding-bottom:12px; margin-bottom:12px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                    <h3 style="margin:0; display:flex; align-items:center; gap:8px;">
+                                        <i data-lucide="shopping-bag" style="color:var(--color-primary);"></i>
+                                        <span>Aktuell order</span>
+                                    </h3>
+                                    <button onclick="clearPosCart()" class="btn btn-ghost btn-xs" style="color:var(--text-muted); font-size:0.75rem;">Rensa</button>
+                                </div>
+                                <!-- PER-ORDER DISCOUNT SELECTOR -->
+                                <div style="background:rgba(139,92,246,0.06); border:1px solid rgba(139,92,246,0.2); border-radius:var(--radius-sm); padding:10px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                        <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.4px;">Rabatt denna order:</span>
+                                        <span id="pos-discount-display" class="badge" style="background:rgba(239,68,68,0.15); color:#ef4444; font-size:0.8rem; font-weight:700; min-width:48px; text-align:center;">0%</span>
+                                    </div>
+                                    <input type="range" id="pos-order-discount" min="0" max="90" step="5" value="0"
+                                        oninput="updatePosOrderDiscount(this.value)"
+                                        style="width:100%; accent-color:var(--color-primary); cursor:pointer;">
+                                    <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:var(--text-muted); margin-top:2px;">
+                                        <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>90%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="pos-cart-items" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:5px;">
+                                <div style="text-align:center; padding:40px 20px; color:var(--text-muted); font-size:0.85rem;">
+                                    <i data-lucide="shopping-cart" style="width:36px; height:36px; stroke-width:1.5; margin-bottom:10px; opacity:0.5;"></i>
+                                    <p>Varukorgen är tom.<br>Klicka på en sko för att lägga till.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="border-top:1px solid var(--border-light); padding-top:15px; margin-top:10px;">
+                            <div id="pos-original-price-row" style="display:none; justify-content:space-between; margin-bottom:4px; font-size:0.8rem; color:var(--text-muted);">
+                                <span>Ordinarie pris:</span>
+                                <span id="pos-original-total" style="text-decoration:line-through;">0 kr</span>
+                            </div>
+                            <div id="pos-savings-row" style="display:none; justify-content:space-between; margin-bottom:6px; font-size:0.8rem; color:#10b981;">
+                                <span>Du sparar:</span>
+                                <span id="pos-savings-amount">0 kr</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.85rem; color:var(--text-secondary);">
+                                <span>Totalt antal:</span>
+                                <span id="pos-total-items-count">0 st</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:15px; font-size:1.15rem; font-weight:800; color:var(--text-primary);">
+                                <span>Summa att betala:</span>
+                                <span id="pos-cart-total-price">0 kr</span>
+                            </div>
+                            <button id="pos-checkout-btn" class="btn btn-primary btn-full btn-lg" onclick="checkoutPosOrder()" style="padding:14px; font-weight:700;">
+                                <i data-lucide="check-circle-2"></i>
+                                <span>Slutför &amp; Registrera Köp</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== TAB 1: INVENTORY CONTENT ==================== -->
+            <div id="tab-inventory-content" class="tab-pane">
+                
+                <!-- --- STATS DASHBOARD --- -->
+                <section class="stats-grid">
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon purple-gradient">
+                            <i data-lucide="package"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Totalt i lager</h3>
+                            <p id="stat-total-stock">0</p>
+                            <span>par skor</span>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon pink-gradient">
+                            <i data-lucide="shapes"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Unika modeller</h3>
+                            <p id="stat-total-models">0</p>
+                            <span>registrerade</span>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon green-gradient">
+                            <i data-lucide="check-circle-2"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Sålda par</h3>
+                            <p id="stat-total-sold">0</p>
+                            <span>par skor sålda</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- --- TOOLS & CONTROLS --- -->
+                <section class="controls-panel glass-card">
+                    <div class="search-bar">
+                        <i data-lucide="search" class="search-icon"></i>
+                        <input type="text" id="search-input" placeholder="Sök på modell, skoart, färg, storlek eller SKU...">
+                        <button id="clear-search" class="btn-clear hide">
+                            <i data-lucide="x"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="filter-group" style="display:flex; align-items:center; gap:15px; flex-wrap:wrap; flex:1;">
+                        <select id="category-filter" class="custom-select" style="min-width:200px;">
+                            <option value="all">Alla skoarter</option>
+                        </select>
+                        <label class="toggle-switch-container" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85rem; color:var(--text-secondary); user-select:none; background:rgba(255,255,255,0.02); border:1px solid var(--border-light); padding:8px 12px; border-radius:var(--radius-sm); transition:all 0.2s ease;">
+                            <input type="checkbox" id="hide-out-of-stock-toggle" checked style="accent-color:var(--color-primary); width:16px; height:16px; cursor:pointer;">
+                            <span>Visa endast i lager (Göm slut)</span>
+                        </label>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button onclick="openScannerModal()" class="btn btn-accent btn-sm" style="display:flex; align-items:center; gap:6px;" title="Skanna streckkod">
+                            <i data-lucide="scan-line"></i>
+                            <span>Skanna</span>
+                        </button>
+                        <button id="add-product-btn" class="btn btn-primary admin-only hide">
+                            <i data-lucide="plus"></i>
+                            <span>Lägg till sko</span>
+                        </button>
+                        <button id="import-excel-btn" class="btn btn-secondary admin-only hide">
+                            <i data-lucide="file-spreadsheet"></i>
+                            <span>Importera Excel</span>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- --- PRODUCTS CONTAINER --- -->
+                <section class="inventory-section">
+                    <div class="section-header">
+                        <h2>Ditt lagerregister</h2>
+                        <span id="results-count" class="badge">0 produkter hittade</span>
+                    </div>
+                    
+                    <!-- Loading State -->
+                    <div id="inventory-loading" class="loading-state">
+                        <div class="spinner"></div>
+                        <p>Laddar lagersaldon...</p>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div id="inventory-empty" class="empty-state hide">
+                        <i data-lucide="package-open" class="empty-icon"></i>
+                        <h3>Inga produkter hittades</h3>
+                        <p>Ladda upp en Excel-fil eller registrera en ny sko manuellt för att komma igång.</p>
+                        <button id="empty-add-btn" class="btn btn-primary">
+                            <i data-lucide="plus"></i>
+                            <span>Lägg till första skon</span>
+                        </button>
+                    </div>
+
+                    <!-- Grid/List of Products -->
+                    <div id="products-grid" class="products-grid">
+                        <!-- Dynamic cards injected via JS -->
+                    </div>
+                </section>
+                
+            </div>
+
+            <!-- ==================== TAB 2: FINANCIAL ANALYTICS ==================== -->
+            <div id="tab-analytics-content" class="tab-pane hide">
+                
+                <!-- --- OVERALL METRICS --- -->
+                <section class="section-header">
+                    <h2>Ekonomisk Uppföljning &amp; Statistik</h2>
+                    <button id="refresh-analytics-btn" class="btn btn-secondary btn-sm">
+                        <i data-lucide="rotate-cw"></i>
+                        <span>Uppdatera rapport</span>
+                    </button>
+                </section>
+                
+                <!-- Capital Metrics Grid -->
+                <section class="stats-grid">
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon purple-gradient">
+                            <i data-lucide="wallet"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Bundet Kapital (Lagerkostnad)</h3>
+                            <p id="stat-capital-cost">0 kr</p>
+                            <span>Baserat på inköpspriser</span>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon pink-gradient">
+                            <i data-lucide="piggy-bank"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Lager Försäljningsvärde</h3>
+                            <p id="stat-capital-potential">0 kr</p>
+                            <span>Vid 100% försäljning</span>
+                        </div>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <div class="stat-icon green-gradient">
+                            <i data-lucide="sparkles"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3>Potentiell Bruttovinst</h3>
+                            <p id="stat-capital-profit">0 kr</p>
+                            <span>Lagersaldo vinstpotential</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- --- BREAK-EVEN & REAL NET PROFIT (NOLLPUNKTSANALYS) --- -->
+                <section class="break-even-section glass-card">
+                    <div class="be-header">
+                        <div class="be-header-title">
+                            <i data-lucide="gauge" class="be-icon purple-text"></i>
+                            <h3>Nollpunktsanalys (Hela verksamheten)</h3>
+                        </div>
+                        <span id="be-status-badge" class="badge">Analyserar...</span>
+                    </div>
+                    
+                    <div class="be-grid">
+                        <div class="be-stat">
+                            <span>Totala Paketinköp (Investerat)</span>
+                            <strong id="be-total-investment">0 kr</strong>
+                            <small class="subtext">Klumpsummor för partier</small>
+                        </div>
+                        <div class="be-stat">
+                            <span>Ackumulerad Försäljning</span>
+                            <strong id="be-total-revenue" style="color:var(--text-primary);">0 kr</strong>
+                            <small class="subtext">Faktiska intäkter</small>
+                        </div>
+                        <div class="be-stat highlight">
+                            <span>Faktisk Nettovinst (Kassaflöde)</span>
+                            <strong id="be-net-profit">0 kr</strong>
+                            <small class="subtext" id="be-net-profit-sub">Kvar till nollpunkten</small>
+                        </div>
+                    </div>
+                    
+                    <div class="be-progress-wrapper">
+                        <div class="be-progress-labels">
+                            <span>Start (0%)</span>
+                            <span id="be-progress-percent" style="font-weight:600; color:var(--color-primary);">0%</span>
+                            <span>Nollpunkt nådd (100%+)</span>
+                        </div>
+                        <div class="be-progress-track">
+                            <div id="be-progress-bar" class="be-progress-fill" style="width: 0%;"></div>
+                        </div>
+                        <p class="be-tip-msg" id="be-tip-text">Sälj för ytterligare 0 kr för att break-even!</p>
+                    </div>
+                </section>
+
+                <!-- --- PROJECTS BATCH PORTFOLIO (PROJEKTÖVERSIKT) --- -->
+                <section class="projects-portfolio-section">
+                    <div class="section-header" style="margin-top: 30px; margin-bottom: 15px;">
+                        <div style="display:flex; align-items:center; gap: 8px;">
+                            <i data-lucide="folder-kanban" style="color:var(--color-accent); width:20px; height:20px;"></i>
+                            <h3 style="font-family:var(--font-title); font-size:1.2rem; font-weight:700; color:var(--text-primary);">Aktiv Projektportfölj (Individuella partier)</h3>
+                        </div>
+                        <span class="badge" id="portfolio-project-count">0 aktiva partier</span>
+                    </div>
+                    
+                    <div class="projects-portfolio-grid" id="projects-portfolio-grid">
+                        <!-- Dynamic project cards injected by JS -->
+                    </div>
+                </section>
+
+                <!-- Sales Performance Periods -->
+                <section class="analytics-periods-grid">
+                    
+                    <!-- Today -->
+                    <div class="period-card glass-card">
+                        <div class="period-header">
+                            <h3>Idag</h3>
+                            <i data-lucide="calendar-check" class="period-icon"></i>
+                        </div>
+                        <div class="period-stats">
+                            <div class="p-stat">
+                                <span>Omsättning</span>
+                                <strong id="perf-today-revenue">0 kr</strong>
+                            </div>
+                            <div class="p-stat">
+                                <span>Kostnad</span>
+                                <span id="perf-today-cost" class="val-muted">0 kr</span>
+                            </div>
+                            <div class="p-stat divider">
+                                <span>Vinst</span>
+                                <strong id="perf-today-profit" class="val-success">0 kr</strong>
+                            </div>
+                            <div class="p-stat">
+                                <span>Vinstmarginal</span>
+                                <span id="perf-today-margin" class="badge">0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- This Week -->
+                    <div class="period-card glass-card">
+                        <div class="period-header">
+                            <h3>Denna Vecka</h3>
+                            <i data-lucide="calendar-days" class="period-icon"></i>
+                        </div>
+                        <div class="period-stats">
+                            <div class="p-stat">
+                                <span>Omsättning</span>
+                                <strong id="perf-week-revenue">0 kr</strong>
+                            </div>
+                            <div class="p-stat">
+                                <span>Kostnad</span>
+                                <span id="perf-week-cost" class="val-muted">0 kr</span>
+                            </div>
+                            <div class="p-stat divider">
+                                <span>Vinst</span>
+                                <strong id="perf-week-profit" class="val-success">0 kr</strong>
+                            </div>
+                            <div class="p-stat">
+                                <span>Vinstmarginal</span>
+                                <span id="perf-week-margin" class="badge">0%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- This Month -->
+                    <div class="period-card glass-card">
+                        <div class="period-header">
+                            <h3>Denna Månad</h3>
+                            <i data-lucide="calendar-range" class="period-icon"></i>
+                        </div>
+                        <div class="period-stats">
+                            <div class="p-stat">
+                                <span>Omsättning</span>
+                                <strong id="perf-month-revenue">0 kr</strong>
+                            </div>
+                            <div class="p-stat">
+                                <span>Kostnad</span>
+                                <span id="perf-month-cost" class="val-muted">0 kr</span>
+                            </div>
+                            <div class="p-stat divider">
+                                <span>Vinst</span>
+                                <strong id="perf-month-profit" class="val-success">0 kr</strong>
+                            </div>
+                            <div class="p-stat">
+                                <span>Vinstmarginal</span>
+                                <span id="perf-month-margin" class="badge">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Sales feed & History -->
+                <section class="sales-history-section glass-card">
+                    <div class="sales-history-header">
+                        <h3>Senaste registrerade försäljningar</h3>
+                        <i data-lucide="receipt"></i>
+                    </div>
+                    <div class="sales-table-wrapper">
+                        <table class="sales-history-table">
+                            <thead>
+                                <tr>
+                                    <th>Tidpunkt</th>
+                                    <th>Skoart</th>
+                                    <th>Modell</th>
+                                    <th>Storlek</th>
+                                    <th>Färg</th>
+                                    <th>Inköpspris</th>
+                                    <th>Såld för</th>
+                                    <th>Bruttovinst</th>
+                                    <th>Marginal</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sales-history-tbody">
+                                <!-- Dynamically filled with transactions -->
+                                <tr>
+                                    <td colspan="9" style="text-align:center; color: var(--text-muted); padding:30px;">Inga försäljningar registrerade än. Minska lagersaldot på en sko för att skapa en försäljning!</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+            </div>
+
+        </main>
+        
+        <!-- --- FOOTER --- -->
+        <footer class="app-footer">
+            <p>LAGERPRO &copy; 2026. Skapat för 240+ par skor och oändliga möjligheter.</p>
+        </footer>
+
+    </div>
+
+    <!-- ==================== MODALS ==================== -->
+
+    <!-- --- 1. ADD/EDIT PRODUCT MODAL --- -->
+    <div id="product-modal" class="modal-overlay hide">
+        <div class="modal-card glass-modal modal-lg">
+            <div class="modal-header">
+                <h2 id="product-modal-title">Registrera Ny Sko</h2>
+                <button class="btn-close modal-close-btn"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="product-form">
+                    <div class="form-grid">
+                        <div class="input-container">
+                            <label for="prod-name">Modellnamn *</label>
+                            <input type="text" id="prod-name" required placeholder="T.ex. Torsten, Amanda, Tuva...">
+                        </div>
+                        <div class="input-container">
+                            <label for="prod-category">Skoart / Kategori *</label>
+                            <input type="text" id="prod-category" required placeholder="T.ex. Känga, Sandal, Promenadsko..." list="category-datalist">
+                            <datalist id="category-datalist">
+                                <option value="Känga">
+                                <option value="Sandal">
+                                <option value="Promenadsko">
+                                <option value="Sommarsko">
+                                <option value="Innesko">
+                                <option value="Klacksko">
+                                <option value="Stövel">
+                                <option value="Loafer">
+                                </datalist>
+                        </div>
+                    </div>
+                    
+                    <div class="input-container">
+                        <label for="prod-desc">Beskrivning (valfritt)</label>
+                        <textarea id="prod-desc" rows="2" placeholder="Skriv en kort notering eller beskrivning..."></textarea>
+                    </div>
+
+                    <div class="variants-section">
+                        <div class="variants-header">
+                            <h3>Storlekar, Färger &amp; Ekonomi (Varianter)</h3>
+                            <button type="button" id="add-variant-row-btn" class="btn btn-sm btn-secondary">
+                                <i data-lucide="plus"></i>
+                                <span>Lägg till rad</span>
+                            </button>
+                        </div>
+                        
+                        <div class="variants-table-wrapper">
+                            <table class="variants-edit-table">
+                                <thead>
+                                    <tr>
+                                        <th>Storlek *</th>
+                                        <th>Färg *</th>
+                                        <th>Lager *</th>
+                                        <th>Inköpspris (kr)</th>
+                                        <th>Säljpris (kr) *</th>
+                                        <th>Ord. Nypris (kr) *</th>
+                                        <th>Streckkod (valfritt)</th>
+                                        <th style="width: 50px;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="variants-tbody">
+                                    <!-- Dynamic rows injected here, starts with 1 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-ghost modal-close-btn">Avbryt</button>
+                        <button type="submit" class="btn btn-primary">Spara produkt</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- --- 2. BARCODE SCANNER MODAL --- -->
+    <div id="scan-modal" class="modal-overlay hide">
+        <div class="modal-card glass-modal modal-sm">
+            <div class="modal-header">
+                <h2>Skanna streckkod</h2>
+                <button class="btn-close modal-close-btn" id="stop-scan-btn"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="scanner-container">
+                    <div id="reader" style="width: 100%;"></div>
+                    <div class="scanner-laser"></div>
+                </div>
+                
+                <div class="manual-sku-input">
+                    <p class="scan-tip">Rikta mobilens kamera mot skokartongens streckkod eller skriv in koden manuellt nedan:</p>
+                    <div class="input-group">
+                        <i data-lucide="keyboard" class="input-icon"></i>
+                        <input type="text" id="manual-sku" placeholder="Skriv streckkod/SKU manuellt...">
+                        <button id="manual-sku-btn" class="btn btn-primary">Sök</button>
+                    </div>
+                </div>
+                
+                <div id="scan-result" class="scan-result-card hide">
+                    <!-- Scanned result display -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- --- 3. EXCEL IMPORT WIZARD MODAL --- -->
+    <div id="excel-modal" class="modal-overlay hide">
+        <div class="modal-card glass-modal modal-lg">
+            <div class="modal-header">
+                <h2>Excel Import Wizard</h2>
+                <button class="btn-close modal-close-btn"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                
+                <!-- Step 1: Upload -->
+                <div id="import-step-upload" class="import-step">
+                    <div class="drop-zone" id="excel-drop-zone">
+                        <i data-lucide="file-spreadsheet" class="drop-icon animate-bounce-slow"></i>
+                        <h3>Dra och släpp din Excel-fil här</h3>
+                        <p>eller</p>
+                        <label for="excel-file-input" class="btn btn-secondary">Välj fil från datorn</label>
+                        <input type="file" id="excel-file-input" class="hide" accept=".xlsx, .xls, .csv">
+                        <span class="file-rules">Stöder .xlsx, .xls och .csv</span>
+                    </div>
+                </div>
+                
+                <!-- Step 2: Verification/Mapping (The Wizard) -->
+                <div id="import-step-verify" class="import-step hide">
+                    <div class="wizard-intro">
+                        <i data-lucide="wand-2" class="wizard-icon"></i>
+                        <div>
+                            <h3>Intelligent tolkning klar!</h3>
+                            <p>Vi har analyserat filen och fördelat dina <strong>240 par skor</strong>. Vänligen granska fördelningen och ange prissättning för leveransen nedan innan du sparar.</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Global batch pricing tool -->
+                    <div class="batch-pricing-tool glass-panel">
+                        <div class="pricing-tool-header">
+                            <i data-lucide="coins" style="color:var(--color-primary);"></i>
+                            <h4>Sätt priser för detta sko-parti:</h4>
+                        </div>
+                        <div class="pricing-inputs">
+                            <div class="price-input-container" style="flex: 1.5; min-width: 250px;">
+                                <label for="batch-total-package-price" style="color: var(--color-accent); font-weight:700;">Totalt paketpris för hela leveransen (valfritt)</label>
+                                <input type="number" id="batch-total-package-price" placeholder="T.ex. 20000 (Räknar ut snitt automatiskt!)" style="width:100%; border-color: rgba(236, 72, 153, 0.4);">
+                                <span style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Fyll i detta om du köpte alla 240 par för en klumpsumma.</span>
+                            </div>
+                            <div class="price-input-container">
+                                <label for="batch-purchase-price">Styckpris Inköp (kr)</label>
+                                <input type="number" id="batch-purchase-price" value="150" placeholder="SEK">
+                            </div>
+                            <div class="price-input-container">
+                                <label for="batch-selling-price">Styckpris Försäljning (kr)</label>
+                                <input type="number" id="batch-selling-price" value="399" placeholder="SEK">
+                            </div>
+                            <button type="button" id="apply-batch-pricing-btn" class="btn btn-sm btn-primary">
+                                Använd priser
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="wizard-table-wrapper">
+                        <table class="wizard-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">Rad</th>
+                                    <th>Kategori</th>
+                                    <th>Modell</th>
+                                    <th>Originalstorlek (i Excel)</th>
+                                    <th>Tolkade Varianter (Färg, Storlek, Lagersaldo &amp; Pris)</th>
+                                    <th style="width: 70px;">Totalt</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wizard-tbody">
+                                <!-- Dynamic parsed rows with select fields for colors/sizes will go here -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="modal-footer">
+                        <button type="button" id="back-to-upload-btn" class="btn btn-ghost">Tillbaka</button>
+                        <button type="button" id="confirm-import-btn" class="btn btn-primary">
+                            <span>Spara alla i lagret</span>
+                            <i data-lucide="check"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="import-loading" class="import-loading-state hide">
+                    <div class="spinner"></div>
+                    <p id="import-loading-text">Analyserar Excel-filen...</p>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <!-- --- 4. SETTINGS MODAL --- -->
+    <div id="settings-modal" class="modal-overlay hide">
+        <div class="modal-card glass-modal modal-sm">
+            <div class="modal-header">
+                <h2>Inställningar</h2>
+                <button class="btn-close modal-close-btn"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h3>Fjärråtkomst Lösenord</h3>
+                    <p class="settings-desc">Lösenordet du anger på din mobiltelefon när du ansluter på distans.</p>
+                    <div class="input-container">
+                        <label for="settings-pw">Nytt Lösenord</label>
+                        <div class="input-group">
+                            <i data-lucide="key-round" class="input-icon"></i>
+                            <input type="password" id="settings-pw" placeholder="Minst 4 tecken...">
+                        </div>
+                    </div>
+                    <button id="save-pw-btn" class="btn btn-primary btn-sm">Spara lösenord</button>
+                    <p id="settings-msg" class="success-msg hide"></p>
+                </div>
+                
+                <div class="settings-section divider">
+                    <h3>Systeminformation</h3>
+                    <div class="sys-info-row">
+                        <span>Lokal server-adress:</span>
+                        <code id="local-ip-address">http://localhost:5000</code>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- --- 5. QR CODE VIEWER MODAL --- -->
+    <div id="qr-modal" class="modal-overlay hide">
+        <div class="modal-card glass-modal modal-xs text-center">
+            <div class="modal-header">
+                <h2 id="qr-modal-title">Streckkod / QR-kod</h2>
+                <button class="btn-close modal-close-btn"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="qr-container">
+                    <img id="qr-image" src="" alt="QR Code">
+                </div>
+                <p id="qr-sku-text" class="qr-sku"></p>
+                <p class="qr-tip">Skriv ut denna kod och klistra på skokartongen för snabb skanning med mobilen.</p>
+                <button id="print-qr-btn" class="btn btn-secondary btn-sm btn-full">
+                    <i data-lucide="printer"></i>
+                    <span>Skriv ut kod</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- --- 6. ADMIN PANEL MODAL --- -->
+    <div id="admin-modal" class="modal-overlay hide">
+        <div class="modal-card glass-modal modal-md" style="max-width: 900px; width: 95%;">
+            <div class="modal-header" style="border-bottom: 1px solid var(--border-light); padding-bottom: 15px;">
+                <div style="display:flex; align-items:center; gap: 10px;">
+                    <i data-lucide="shield-check" style="color:var(--color-accent); width:24px; height:24px;"></i>
+                    <h2 style="margin:0;">Administratörspanel</h2>
+                </div>
+                <button class="btn-close modal-close-btn"><i data-lucide="x"></i></button>
+            </div>
+            
+            <!-- Admin Sub-tabs -->
+            <div class="admin-tabs" style="display:flex; gap:10px; margin-top:15px; border-bottom:1px solid var(--border-light); padding-bottom:10px;">
+                <button id="admin-tab-users" class="btn btn-sm btn-primary">Användare &amp; Roller</button>
+                <button id="admin-tab-projects" class="btn btn-sm btn-secondary">Projekthantering</button>
+            </div>
+            
+            <div class="modal-body" style="padding-top:20px;">
+                
+                <!-- SECTION 1: USERS -->
+                <div id="admin-sect-users">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+                        <h3 style="margin:0; font-size:1.1rem; color:var(--text-primary);">Användarregister</h3>
+                        <button id="create-user-btn" class="btn btn-accent btn-sm">
+                            <i data-lucide="user-plus"></i>
+                            <span>Skapa ny användare</span>
+                        </button>
+                    </div>
+                    
+                    <div class="table-container" style="overflow-x:auto;">
+                        <table class="variants-list" style="width:100%;">
+                            <thead>
+                                <tr>
+                                    <th>E-post</th>
+                                    <th>Roll</th>
+                                    <th>Tillåtna Projekt</th>
+                                    <th style="text-align:right;">Åtgärder</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-users-tbody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- SECTION 2: PROJECTS -->
+                <div id="admin-sect-projects" class="hide">
+                    <h3 style="margin:0 0 15px 0; font-size:1.1rem; color:var(--text-primary);">Skapa Nytt Projekt</h3>
+                    <div class="settings-section" style="padding:15px; background:rgba(255,255,255,0.02); border:1px solid var(--border-light); border-radius:var(--radius-md); margin-bottom:20px;">
+                        <div class="input-container" style="margin-bottom:15px;">
+                            <label for="new-project-name">Projektnamn (Skoart/Kategori)</label>
+                            <div class="input-group">
+                                <i data-lucide="folder-plus" class="input-icon"></i>
+                                <input type="text" id="new-project-name" placeholder="T.ex. Sommarkläder, Vinterkampanj..." style="width:100%;">
+                            </div>
+                        </div>
+                        <button id="save-project-btn" class="btn btn-primary btn-sm">
+                            <span>Spara Projekt</span>
+                        </button>
+                    </div>
+                    
+                    <h3 style="margin:0 0 10px 0; font-size:1.1rem; color:var(--text-primary);">Befintliga Projekt</h3>
+                    <ul id="admin-projects-list" style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;">
+                        <!-- Populated dynamically -->
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- --- 7. USER FORM MODAL --- -->
+    <div id="user-form-modal" class="modal-overlay hide">
+        <div class="modal-card glass-modal modal-sm" style="max-width: 450px;">
+            <div class="modal-header">
+                <h2 id="user-modal-title">Skapa Användare</h2>
+                <button class="btn-close modal-close-btn" onclick="closeModal('user-form-modal')"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="admin-user-form">
+                    <input type="hidden" id="edit-user-id">
+                    
+                    <div class="input-container" style="margin-bottom:15px;">
+                        <label for="user-email-input">E-postadress</label>
+                        <div class="input-group">
+                            <i data-lucide="mail" class="input-icon"></i>
+                            <input type="email" id="user-email-input" required placeholder="T.ex. namn@företag.se" style="width:100%;">
+                        </div>
+                    </div>
+                    
+                    <div class="input-container" style="margin-bottom:15px;">
+                        <label for="user-password-input" id="user-password-label">Lösenord</label>
+                        <div class="input-group">
+                            <i data-lucide="key-round" class="input-icon"></i>
+                            <input type="password" id="user-password-input" required placeholder="Minst 4 tecken..." style="width:100%;">
+                        </div>
+                    </div>
+                    
+                    <div class="input-container" style="margin-bottom:15px;">
+                        <label for="user-role-select">Roll</label>
+                        <select id="user-role-select" class="custom-select" style="width:100%;">
+                            <option value="user">Standard Användare (Lager &amp; Försäljning)</option>
+                            <option value="admin">Administratör (Full Behörighet)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="input-container" style="margin-bottom:20px;">
+                        <label for="user-projects-select">Tillåtna Projekt (Standardanvändare)</label>
+                        <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 8px 0;">Håll in CTRL för att välja flera projekt. Välj 'Alla' om de ska se allt.</p>
+                        <select id="user-projects-select" multiple class="custom-select" style="width:100%; height:120px; padding:8px;">
+                            <option value="all" selected>Alla projekt</option>
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-full">
+                        <span id="user-form-submit-text">Spara Användare</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== POS PRODUCT SELECTION MODAL ==================== -->
+    <div id="pos-variant-modal" class="modal-overlay hide">
+        <div class="modal-card glass-modal modal-sm" style="max-width: 450px; border-color:var(--color-primary);">
+            <div class="modal-header">
+                <h2 id="pos-modal-product-name" style="font-size:1.3rem;">Välj Storlek &amp; Färg</h2>
+                <button type="button" class="btn-close modal-close-btn" onclick="closeModal('pos-variant-modal')">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap:15px;">
+                <p id="pos-modal-product-desc" style="font-size:0.85rem; color:var(--text-secondary); margin:0;"></p>
+                
+                <div>
+                    <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:8px; font-weight:600; text-transform:uppercase;">Välj Storlek:</label>
+                    <div id="pos-modal-sizes-grid" style="display:flex; flex-wrap:wrap; gap:8px;">
+                        <!-- Injected size buttons -->
+                    </div>
+                </div>
+                
+                <div>
+                    <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:8px; font-weight:600; text-transform:uppercase;">Välj Färg:</label>
+                    <div id="pos-modal-colors-grid" style="display:flex; flex-wrap:wrap; gap:8px;">
+                        <!-- Injected color buttons -->
+                    </div>
+                </div>
+                
+                <div id="pos-modal-stock-info" class="badge" style="font-size:0.8rem; padding:8px 12px; text-align:center; display:none; width:100%;">
+                    Lagerstatus: 0 st tillgängliga
+                </div>
+            </div>
+            <div class="modal-footer" style="display:flex; gap:10px;">
+                <button type="button" class="btn btn-ghost btn-full" onclick="closeModal('pos-variant-modal')">Avbryt</button>
+                <button type="button" id="pos-modal-add-btn" class="btn btn-primary btn-full" disabled onclick="addSelectedToPosCart()">
+                    <i data-lucide="shopping-cart"></i>
+                    <span>Lägg i varukorg</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {% endif %}
+
+    <!-- Core App JS -->
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
