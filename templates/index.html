@@ -18,33 +18,212 @@
     
     <!-- Stylesheet -->
     <link rel="stylesheet" href="/static/css/style.css">
+    
+    <!-- PWA & Mobile Install Support -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#8b5cf6">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Lagerpro">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 </head>
 <body class="dark-theme">
 
     {% if require_login %}
-    <!-- --- LOGIN WALL --- -->
-    <div id="login-container" class="glass-panel" style="max-width:400px; width:90%; padding:30px; margin: 100px auto;">
-        <div class="login-header">
-            <div class="logo">
-                <i data-lucide="package-search" class="logo-icon"></i>
-                <h1>LAGER<span>PRO</span></h1>
+    <!-- --- PUBLIC CUSTOMER CATALOG --- -->
+    <div id="public-container">
+        
+        <!-- --- PUBLIC HEADER --- -->
+        <header class="glass-header">
+            <div class="header-left">
+                <div class="logo">
+                    <i data-lucide="package-search" class="logo-icon animate-float"></i>
+                    <h1>LAGER<span>PRO</span></h1>
+                </div>
+                <span class="badge" style="background: rgba(217, 70, 239, 0.15); color: var(--color-accent); border: 1px solid rgba(217, 70, 239, 0.3); font-weight: 700; margin-left: 10px; font-size: 0.75rem; letter-spacing: 0.5px;">KUNDPORTAL</span>
             </div>
-            <p style="font-size:0.85rem; color:var(--text-secondary); margin-top:8px;">Detta system är privat och stängt. Logga in med dina administratörsuppgifter.</p>
+            <div class="header-right" style="display: flex; gap: 8px;">
+                <button id="pwa-public-install-btn" class="btn btn-ghost hide" title="Installera LAGERPRO som app" style="border: 1px solid var(--border-light); font-size: 0.85rem; display: flex; align-items: center; gap: 6px; color: var(--color-accent);">
+                    <i data-lucide="download" style="width:14px; height:14px;"></i>
+                    <span class="pwa-text">Installera App</span>
+                </button>
+                <button id="show-login-modal-btn" class="btn btn-ghost" title="Personalinloggning" style="border: 1px solid var(--border-light); font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
+                    <i data-lucide="log-in" style="width:14px; height:14px;"></i>
+                    <span>Personalinloggning</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- --- MAIN CONTENT --- -->
+        <main class="content-wrapper">
+            
+            <!-- Hero / Greeting Banner -->
+            <div class="welcome-banner glass-card" style="padding:40px; text-align:center; margin-bottom:30px; background:linear-gradient(135deg, rgba(217,70,239,0.05) 0%, rgba(139,92,246,0.05) 100%); border:1px solid var(--border-light);">
+                <i data-lucide="sparkles" style="width:48px; height:48px; color:var(--color-accent); margin-bottom:15px;" class="animate-float"></i>
+                <h2 style="font-size:2rem; margin:0 0 10px 0; font-weight:800; letter-spacing:-0.5px;">Butikens Bokningsportal</h2>
+                <p style="font-size:1.05rem; color:var(--text-secondary); margin:0 auto; max-width:600px; line-height: 1.6;">
+                    Hitta dina favoritprodukter, välj variant och reservera direkt online! Dina produkter läggs undan direkt i butiken. Du betalar och hämtar dem enkelt på plats. Ingen registrering eller konto krävs.
+                </p>
+            </div>
+
+            <!-- Filter and Search Panel -->
+            <section class="controls-panel glass-card" style="margin-bottom: 30px; padding: 20px;">
+                <div class="search-filter-row" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
+                    <div class="search-box" style="flex: 2; min-width: 250px; position: relative;">
+                        <i data-lucide="search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); width: 16px; height: 16px;"></i>
+                        <input type="text" id="public-search" placeholder="Sök efter produkt, färg, storlek eller kategori..." style="width: 100%; padding: 10px 12px 10px 40px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-light); border-radius: var(--radius-sm); color: var(--text-primary);">
+                    </div>
+                    
+                    <div class="filter-box" style="flex: 1; min-width: 150px;">
+                        <select id="public-category-filter" class="custom-select" style="width: 100%; height: 42px;">
+                            <option value="all">Alla kategorier</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-box" style="flex: 1; min-width: 150px;">
+                        <select id="public-size-filter" class="custom-select" style="width: 100%; height: 42px;">
+                            <option value="all">Alla storlekar</option>
+                        </select>
+                    </div>
+                    <div class="filter-box" style="flex: 1; min-width: 150px; position: relative;">
+                        <i data-lucide="tag" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); width: 14px; height: 14px; pointer-events:none;"></i>
+                        <input type="number" id="public-max-price" placeholder="Max pris (kr)" min="0" step="50"
+                            style="width: 100%; height: 42px; padding: 10px 12px 10px 36px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-light); border-radius: var(--radius-sm); color: var(--text-primary); box-sizing: border-box;">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Product Grid -->
+            <section class="products-section">
+                <div id="public-catalog-grid" class="products-grid">
+                    <!-- Dynamic cards injected via JS -->
+                </div>
+                
+                <div id="public-empty-state" class="empty-state hide" style="text-align: center; padding: 60px 20px;">
+                    <i data-lucide="package-open" style="width: 48px; height: 48px; color: var(--text-muted); margin-bottom: 15px;"></i>
+                    <h3 style="margin-bottom: 8px;">Inga matchande produkter i lager för tillfället</h3>
+                    <p style="color: var(--text-secondary);">Prova att ändra din sökning eller filter.</p>
+                </div>
+            </section>
+
+        </main>
+        
+        <!-- --- PUBLIC FOOTER --- -->
+        <footer class="app-footer" style="margin-top:50px;">
+            <p>LAGERPRO Kundportal &copy; 2026. Reservera enkelt online och hämta i butik.</p>
+        </footer>
+
+    </div>
+
+    <!-- --- CUSTOMER BOOKING MODAL --- -->
+    <div id="public-booking-modal" class="modal-overlay hide">
+        <div class="modal-card glass-modal modal-sm" style="max-width: 480px;">
+            <div class="modal-header">
+                <h2>Reservera produkt</h2>
+                <button class="btn-close modal-close-btn" onclick="closeModal('public-booking-modal')"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="public-booking-form">
+                    <input type="hidden" id="booking-variant-id">
+                    
+                    <div id="public-booking-summary" class="glass-panel" style="padding: 15px; margin-bottom: 20px; border-color: var(--color-primary);">
+                        <!-- Summary dynamic content -->
+                    </div>
+                    
+                    <div class="input-container" style="margin-bottom: 12px;">
+                        <label for="booking-first-name">Förnamn *</label>
+                        <div class="input-group">
+                            <i data-lucide="user" class="input-icon"></i>
+                            <input type="text" id="booking-first-name" required placeholder="Ditt förnamn..." style="width:100%;">
+                        </div>
+                    </div>
+                    
+                    <div class="input-container" style="margin-bottom: 12px;">
+                        <label for="booking-last-name">Efternamn *</label>
+                        <div class="input-group">
+                            <i data-lucide="user" class="input-icon"></i>
+                            <input type="text" id="booking-last-name" required placeholder="Ditt efternamn..." style="width:100%;">
+                        </div>
+                    </div>
+                    
+                    <div class="input-container" style="margin-bottom: 20px;">
+                        <label for="booking-phone">Telefonnummer *</label>
+                        <div class="input-group">
+                            <i data-lucide="phone" class="input-icon"></i>
+                            <input type="tel" id="booking-phone" required placeholder="T.ex. 070-123 45 67" style="width:100%;">
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-full" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+                        <i data-lucide="calendar-check"></i>
+                        <span>Bekräfta bokning</span>
+                    </button>
+                </form>
+            </div>
         </div>
-        <div class="login-form">
-            <div class="input-group" style="margin-bottom: 15px;">
-                <i data-lucide="mail" class="input-icon"></i>
-                <input type="email" id="login-email" placeholder="Din e-postadress..." value="apersson508@gmail.com" required style="width:100%;">
+    </div>
+
+    <!-- --- BOOKING SUCCESS MODAL --- -->
+    <div id="booking-success-modal" class="modal-overlay hide">
+        <div class="modal-card glass-modal modal-xs text-center" style="max-width: 400px;">
+            <div class="modal-header" style="border: none; padding-bottom: 0;">
+                <button class="btn-close modal-close-btn" onclick="closeModal('booking-success-modal')"><i data-lucide="x"></i></button>
             </div>
-            <div class="input-group" style="margin-bottom: 20px;">
-                <i data-lucide="lock" class="input-icon"></i>
-                <input type="password" id="login-password" placeholder="Ange lösenord..." required style="width:100%;">
+            <div class="modal-body" style="padding: 20px 10px;">
+                <div style="width:60px; height:60px; border-radius:50%; background:rgba(16,185,129,0.1); border:2px solid var(--color-success); display:flex; align-items:center; justify-content:center; margin: 0 auto 15px auto;">
+                    <i data-lucide="check" style="color:var(--color-success); width:32px; height:32px;"></i>
+                </div>
+                <h3 style="margin-bottom: 8px;">Din bokning är klar!</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 12px;">
+                    Vi har lagt undan dina produkter i butiken åt dig.
+                </p>
+                <div class="pickup-notice" style="background:rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: var(--radius-sm); padding: 12px; margin: 15px 0 20px 0; text-align: left;">
+                    <div style="display:flex; gap:8px; align-items:center; margin-bottom:4px;">
+                        <i data-lucide="map-pin" style="color:#fbbf24; width:16px; height:16px; flex-shrink:0;"></i>
+                        <strong style="font-size:0.85rem; color:var(--text-primary);">Hämtas på:</strong>
+                    </div>
+                    <span style="display:block; font-size:0.95rem; font-weight:700; color:#fbbf24; margin-left:24px;">Ramdala krukor</span>
+                    <span style="display:block; font-size:0.75rem; color:var(--text-secondary); margin-left:24px; margin-top:2px;">Välkommen att hämta och betala i butiken inom 3 dagar.</span>
+                </div>
+                <button class="btn btn-success btn-full" onclick="closeModal('booking-success-modal')">Stäng</button>
             </div>
-            <button id="login-btn" class="btn btn-primary btn-full">
-                <span>Logga in</span>
-                <i data-lucide="arrow-right"></i>
-            </button>
-            <p id="login-error" class="error-msg hide" style="margin-top:15px; text-align:center;"></p>
+        </div>
+    </div>
+
+    <!-- --- STAFF LOGIN MODAL OVERLAY --- -->
+    <div id="login-modal-overlay" class="modal-overlay hide">
+        <div class="modal-card glass-modal modal-sm" style="max-width:400px; padding: 20px;">
+            <div class="modal-header" style="border: none; padding-bottom: 0;">
+                <div class="logo" style="margin: 0 auto;">
+                    <i data-lucide="package-search" class="logo-icon"></i>
+                    <h1>LAGER<span>PRO</span></h1>
+                </div>
+                <button class="btn-close modal-close-btn" onclick="closeModal('login-modal-overlay')"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body" style="padding-top: 10px;">
+                <p style="font-size:0.8rem; color:var(--text-secondary); text-align:center; margin-bottom:20px;">Detta gränssnitt är för butikspersonal. Logga in för att hantera lager, kassa och bokningar.</p>
+                <div class="login-form">
+                    <div class="input-container" style="margin-bottom: 12px;">
+                        <label for="login-email">E-postadress</label>
+                        <div class="input-group">
+                            <i data-lucide="mail" class="input-icon"></i>
+                            <input type="email" id="login-email" placeholder="Din e-postadress..." autocomplete="off" required style="width:100%;">
+                        </div>
+                    </div>
+                    <div class="input-container" style="margin-bottom: 20px;">
+                        <label for="login-password">Lösenord</label>
+                        <div class="input-group">
+                            <i data-lucide="lock" class="input-icon"></i>
+                            <input type="password" id="login-password" placeholder="Ange lösenord..." required style="width:100%;">
+                        </div>
+                    </div>
+                    <button id="login-btn" class="btn btn-primary btn-full" style="display:flex; align-items:center; justify-content:center; gap:8px;">
+                        <span>Logga in</span>
+                        <i data-lucide="arrow-right"></i>
+                    </button>
+                    <p id="login-error" class="error-msg hide" style="margin-top:15px; text-align:center; color: var(--color-danger);"></p>
+                </div>
+            </div>
         </div>
     </div>
     {% else %}
@@ -73,6 +252,11 @@
                         <i data-lucide="layout-grid"></i>
                         <span>Lagerregister</span>
                     </button>
+                    <button id="tab-bookings-btn" class="nav-tab">
+                        <i data-lucide="calendar-check"></i>
+                        <span>Bokningar</span>
+                        <span id="bookings-notif-badge" class="bookings-notif-badge hide">0</span>
+                    </button>
                     <button id="tab-analytics-btn" class="nav-tab admin-only hide">
                         <i data-lucide="trending-up"></i>
                         <span>Ekonomi &amp; Statistik</span>
@@ -81,10 +265,6 @@
             </div>
             
             <div class="header-right">
-                <button id="scan-shortcut-btn" class="btn btn-accent btn-sm animate-pulse-accent">
-                    <i data-lucide="scan-line"></i>
-                    <span>Skanna streckkod</span>
-                </button>
                 <button id="admin-panel-btn" class="btn btn-ghost btn-icon admin-only hide" title="Admin-panel" style="color:var(--color-accent);">
                     <i data-lucide="shield-check"></i>
                 </button>
@@ -124,7 +304,7 @@
                                 <i data-lucide="shopping-cart" style="width:24px; height:24px;"></i>
                             </div>
                             <h3 style="margin:0 0 8px 0; font-size:1.2rem; font-weight:700;">Kassa (POS)</h3>
-                            <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:20px;">Sälj skor snabbt och enkelt. Välj skor, ange antal och slutför köp direkt.</p>
+                            <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:20px;">Sälj produkter snabbt och enkelt. Välj variant, ange antal och slutför köp direkt.</p>
                         </div>
                         <button onclick="switchTab('pos')" class="btn btn-primary btn-full">
                             <span>Öppna kassa</span>
@@ -144,7 +324,7 @@
                             <div style="margin-bottom:20px;">
                                 <label style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:8px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px;">Öppna direkt i projekt:</label>
                                 <select id="hub-project-select" class="custom-select" style="width:100%; padding:8px;">
-                                    <option value="all">Alla projekt / Skoarter</option>
+                                    <option value="all">Alla projekt / Kategorier</option>
                                 </select>
                             </div>
                         </div>
@@ -154,7 +334,22 @@
                         </button>
                     </div>
 
-                    <!-- HUB CARD 2: EKONOMI & STATISTIK (ADMIN ONLY) -->
+                    <!-- HUB CARD 2: BOKNINGAR -->
+                    <div class="glass-card hub-card" style="padding:25px; display:flex; flex-direction:column; justify-content:space-between; height:100%; transition:all 0.3s ease;">
+                        <div>
+                            <div style="width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:rgba(236,72,153,0.12); color:#ec4899; margin-bottom:20px;">
+                                <i data-lucide="calendar-check" style="width:24px; height:24px;"></i>
+                            </div>
+                            <h3 style="margin:0 0 8px 0; font-size:1.2rem; font-weight:700;">Bokningar</h3>
+                            <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:20px;">Hantera kundreservationer. Godkänn, reservera eller avbryt inkomna bokningar direkt.</p>
+                        </div>
+                        <button onclick="switchTab('bookings')" class="btn btn-secondary btn-full" style="border-color:#ec4899; color:#ec4899;">
+                            <span>Visa bokningar</span>
+                            <i data-lucide="arrow-right"></i>
+                        </button>
+                    </div>
+
+                    <!-- HUB CARD 3: EKONOMI & STATISTIK (ADMIN ONLY) -->
                     <div class="glass-card hub-card admin-only hide" style="padding:25px; display:flex; flex-direction:column; justify-content:space-between; height:100%; transition:all 0.3s ease;">
                         <div>
                             <div style="width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:rgba(16,185,129,0.12); color:var(--color-success); margin-bottom:20px;">
@@ -169,30 +364,14 @@
                         </button>
                     </div>
 
-                    <!-- HUB CARD 3: ADMIN PANEL (ADMIN ONLY) -->
-                    <div class="glass-card hub-card admin-only hide" style="padding:25px; display:flex; flex-direction:column; justify-content:space-between; height:100%; transition:all 0.3s ease;">
-                        <div>
-                            <div style="width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:rgba(235,179,8,0.12); color:var(--color-warning); margin-bottom:20px;">
-                                <i data-lucide="shield-check" style="width:24px; height:24px;"></i>
-                            </div>
-                            <h3 style="margin:0 0 8px 0; font-size:1.2rem; font-weight:700;">Administratörspanel</h3>
-                            <p style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:20px;">Skapa användare, byt lösenord, tilldela projektbehörigheter samt skapa nya projekt.</p>
-                        </div>
-                        <button onclick="openAdminPanel()" class="btn btn-secondary btn-full" style="border-color:var(--color-warning); color:var(--color-warning);">
-                            <span>Hantera system</span>
-                            <i data-lucide="arrow-right"></i>
-                        </button>
-                    </div>
-
-
                 </div>
             </div>
 
             <!-- ==================== TAB 1.5: KASSA (POS) CONTENT ==================== -->
             <div id="tab-pos-content" class="tab-pane">
-                <div class="pos-wrapper" style="display:grid; grid-template-columns: 2fr 1fr; gap: 20px; height: calc(100vh - 150px); margin-top: 10px;">
+                <div class="pos-wrapper">
                     <!-- LEFT COLUMN: PRODUCT SELECTOR -->
-                    <div class="pos-products-panel glass-card" style="padding: 20px; display:flex; flex-direction:column; gap: 15px; overflow-y: auto;">
+                    <div class="pos-products-panel glass-card">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <h2 style="margin:0; font-size:1.3rem;">Kassa &amp; Snabbköp</h2>
                             <div style="display:flex; align-items:center; gap:8px;">
@@ -208,24 +387,33 @@
                         
                         <div class="search-bar" style="margin:0;">
                             <i data-lucide="search" class="search-icon"></i>
-                            <input type="text" id="pos-search-input" placeholder="Sök sko efter namn eller kategori..." style="padding: 8px 12px 8px 36px; font-size:0.85rem;">
+                            <input type="text" id="pos-search-input" placeholder="Sök produkt efter namn eller kategori..." style="padding: 8px 12px 8px 36px; font-size:0.85rem;">
                         </div>
                         
                         <div id="pos-products-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px;">
                             <!-- Injected dynamically -->
                         </div>
+                        
                     </div>
                     
                     <!-- RIGHT COLUMN: SHOPPING CART -->
                     <div class="pos-cart-panel glass-card" style="padding: 20px; display:flex; flex-direction:column; justify-content:space-between; height: 100%; overflow: hidden;">
                         <div style="display:flex; flex-direction:column; height: 100%; overflow: hidden;">
+                            <!-- Tillbaka till produkter back button for mobile -->
+                            <button id="pos-mobile-back-btn" onclick="toggleMobileCart(false)" class="pos-mobile-back-btn">
+                                <i data-lucide="arrow-left" style="width:16px; height:16px; margin-right:4px;"></i>
+                                <span>Tillbaka till produkter</span>
+                            </button>
                             <div style="border-bottom:1px solid var(--border-light); padding-bottom:12px; margin-bottom:12px;">
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                                     <h3 style="margin:0; display:flex; align-items:center; gap:8px;">
                                         <i data-lucide="shopping-bag" style="color:var(--color-primary);"></i>
                                         <span>Aktuell order</span>
                                     </h3>
-                                    <button onclick="clearPosCart()" class="btn btn-ghost btn-xs" style="color:var(--text-muted); font-size:0.75rem;">Rensa</button>
+                                    <div style="display:flex; align-items:center; gap:6px;">
+                                        <button onclick="clearPosCart()" class="btn btn-ghost btn-xs" style="color:var(--text-muted); font-size:0.75rem;">Rensa</button>
+                                        <button id="pos-cart-close-btn" onclick="toggleMobileCart(false)" class="btn-close pos-cart-close-x" title="Stäng varukorg" aria-label="Stäng varukorg"><i data-lucide="x"></i></button>
+                                    </div>
                                 </div>
                                 <!-- PER-ORDER DISCOUNT SELECTOR -->
                                 <div style="background:rgba(139,92,246,0.06); border:1px solid rgba(139,92,246,0.2); border-radius:var(--radius-sm); padding:10px;">
@@ -245,7 +433,7 @@
                             <div id="pos-cart-items" style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:5px;">
                                 <div style="text-align:center; padding:40px 20px; color:var(--text-muted); font-size:0.85rem;">
                                     <i data-lucide="shopping-cart" style="width:36px; height:36px; stroke-width:1.5; margin-bottom:10px; opacity:0.5;"></i>
-                                    <p>Varukorgen är tom.<br>Klicka på en sko för att lägga till.</p>
+                                    <p>Varukorgen är tom.<br>Klicka på en produkt för att lägga till.</p>
                                 </div>
                             </div>
                         </div>
@@ -288,7 +476,7 @@
                         <div class="stat-info">
                             <h3>Totalt i lager</h3>
                             <p id="stat-total-stock">0</p>
-                            <span>par skor</span>
+                            <span>st produkter</span>
                         </div>
                     </div>
                     <div class="stat-card glass-card">
@@ -306,9 +494,9 @@
                             <i data-lucide="check-circle-2"></i>
                         </div>
                         <div class="stat-info">
-                            <h3>Sålda par</h3>
+                            <h3>Sålda enheter</h3>
                             <p id="stat-total-sold">0</p>
-                            <span>par skor sålda</span>
+                            <span>sålda produkter</span>
                         </div>
                     </div>
                 </section>
@@ -317,7 +505,7 @@
                 <section class="controls-panel glass-card">
                     <div class="search-bar">
                         <i data-lucide="search" class="search-icon"></i>
-                        <input type="text" id="search-input" placeholder="Sök på modell, skoart, färg, storlek eller SKU...">
+                        <input type="text" id="search-input" placeholder="Sök på modell, kategori, färg, storlek eller SKU...">
                         <button id="clear-search" class="btn-clear hide">
                             <i data-lucide="x"></i>
                         </button>
@@ -325,7 +513,7 @@
                     
                     <div class="filter-group" style="display:flex; align-items:center; gap:15px; flex-wrap:wrap; flex:1;">
                         <select id="category-filter" class="custom-select" style="min-width:200px;">
-                            <option value="all">Alla skoarter</option>
+                            <!-- Populeras dynamiskt av JavaScript baserat på användarens behörighet -->
                         </select>
                         <label class="toggle-switch-container" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85rem; color:var(--text-secondary); user-select:none; background:rgba(255,255,255,0.02); border:1px solid var(--border-light); padding:8px 12px; border-radius:var(--radius-sm); transition:all 0.2s ease;">
                             <input type="checkbox" id="hide-out-of-stock-toggle" checked style="accent-color:var(--color-primary); width:16px; height:16px; cursor:pointer;">
@@ -340,7 +528,7 @@
                         </button>
                         <button id="add-product-btn" class="btn btn-primary admin-only hide">
                             <i data-lucide="plus"></i>
-                            <span>Lägg till sko</span>
+                            <span>Lägg till produkt</span>
                         </button>
                         <button id="import-excel-btn" class="btn btn-secondary admin-only hide">
                             <i data-lucide="file-spreadsheet"></i>
@@ -366,10 +554,10 @@
                     <div id="inventory-empty" class="empty-state hide">
                         <i data-lucide="package-open" class="empty-icon"></i>
                         <h3>Inga produkter hittades</h3>
-                        <p>Ladda upp en Excel-fil eller registrera en ny sko manuellt för att komma igång.</p>
+                        <p>Ladda upp en Excel-fil eller registrera en ny produkt manuellt för att komma igång.</p>
                         <button id="empty-add-btn" class="btn btn-primary">
                             <i data-lucide="plus"></i>
-                            <span>Lägg till första skon</span>
+                            <span>Lägg till första produkten</span>
                         </button>
                     </div>
 
@@ -576,7 +764,7 @@
                             <thead>
                                 <tr>
                                     <th>Tidpunkt</th>
-                                    <th>Skoart</th>
+                                    <th>Kategori</th>
                                     <th>Modell</th>
                                     <th>Storlek</th>
                                     <th>Färg</th>
@@ -589,7 +777,65 @@
                             <tbody id="sales-history-tbody">
                                 <!-- Dynamically filled with transactions -->
                                 <tr>
-                                    <td colspan="9" style="text-align:center; color: var(--text-muted); padding:30px;">Inga försäljningar registrerade än. Minska lagersaldot på en sko för att skapa en försäljning!</td>
+                                    <td colspan="9" style="text-align:center; color: var(--text-muted); padding:30px;">Inga försäljningar registrerade än. Minska lagersaldot på en produkt för att skapa en försäljning!</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                
+            </div>
+
+            <!-- ==================== TAB 2.5: RESERVATIONS / BOOKINGS ==================== -->
+            <div id="tab-bookings-content" class="tab-pane hide">
+                
+                <!-- Section Header -->
+                <section class="section-header">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <i data-lucide="calendar-check" style="color:var(--color-accent); width:24px; height:24px;"></i>
+                        <h2>Aktuella Bokningar &amp; Reservationer</h2>
+                    </div>
+                    <button id="refresh-bookings-btn" class="btn btn-secondary btn-sm" onclick="loadBookings()">
+                        <i data-lucide="rotate-cw"></i>
+                        <span>Uppdatera lista</span>
+                    </button>
+                </section>
+                
+                <!-- Filter bar for Bookings -->
+                <section class="controls-panel glass-card" style="margin-bottom: 20px; padding: 15px;">
+                    <div style="display:flex; gap:15px; align-items:center; flex-wrap:wrap;">
+                        <div class="search-box" style="flex:1; min-width:200px; position:relative;">
+                            <i data-lucide="search" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); width: 14px; height: 14px;"></i>
+                            <input type="text" id="bookings-search-input" placeholder="Sök på kundnamn, telefon eller produkt..." style="width:100%; padding:8px 8px 8px 32px; background:rgba(255,255,255,0.02); border:1px solid var(--border-light); border-radius:var(--radius-sm); color:var(--text-primary);" oninput="filterBookings()">
+                        </div>
+                        <div>
+                            <select id="bookings-status-filter" class="custom-select" onchange="filterBookings()">
+                                <option value="all">Alla statusar</option>
+                                <option value="pending" selected>Nya / Obekräftade (Pending)</option>
+                                <option value="reserved">Bokade (Underlagda)</option>
+                                <option value="confirmed">Köp godkänt (Confirmed)</option>
+                                <option value="cancelled">Avbruten (Cancelled)</option>
+                            </select>
+                        </div>
+                    </div>
+                </section>
+                
+                <!-- Bookings Table -->
+                <section class="table-card glass-card">
+                    <div class="table-container">
+                        <table class="variants-list bookings-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Produkt &amp; Detaljer</th>
+                                    <th>Kund &amp; Kontakt</th>
+                                    <th>Status</th>
+                                    <th style="text-align:right;">Åtgärder</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bookings-tbody">
+                                <tr>
+                                    <td colspan="5" style="text-align:center; color: var(--text-muted); padding:30px;">Laddar bokningar...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -602,7 +848,7 @@
         
         <!-- --- FOOTER --- -->
         <footer class="app-footer">
-            <p>LAGERPRO &copy; 2026. Skapat för 240+ par skor och oändliga möjligheter.</p>
+            <p>LAGERPRO &copy; 2026. Skapat för dina produkter och oändliga möjligheter.</p>
         </footer>
 
     </div>
@@ -613,7 +859,7 @@
     <div id="product-modal" class="modal-overlay hide">
         <div class="modal-card glass-modal modal-lg">
             <div class="modal-header">
-                <h2 id="product-modal-title">Registrera Ny Sko</h2>
+                <h2 id="product-modal-title">Registrera Ny Produkt</h2>
                 <button class="btn-close modal-close-btn"><i data-lucide="x"></i></button>
             </div>
             <div class="modal-body">
@@ -624,17 +870,17 @@
                             <input type="text" id="prod-name" required placeholder="T.ex. Torsten, Amanda, Tuva...">
                         </div>
                         <div class="input-container">
-                            <label for="prod-category">Skoart / Kategori *</label>
-                            <input type="text" id="prod-category" required placeholder="T.ex. Känga, Sandal, Promenadsko..." list="category-datalist">
+                            <label for="prod-category">Kategori / Produkttyp *</label>
+                            <input type="text" id="prod-category" required placeholder="T.ex. Kläder, Skor, Heminredning..." list="category-datalist">
                             <datalist id="category-datalist">
-                                <option value="Känga">
-                                <option value="Sandal">
-                                <option value="Promenadsko">
-                                <option value="Sommarsko">
-                                <option value="Innesko">
-                                <option value="Klacksko">
-                                <option value="Stövel">
-                                <option value="Loafer">
+                                <option value="Skor">
+                                <option value="Kläder">
+                                <option value="Accessoarer">
+                                <option value="Heminredning">
+                                <option value="Elektronik">
+                                <option value="Väskor">
+                                <option value="Sport">
+                                <option value="Leksaker">
                                 </datalist>
                         </div>
                     </div>
@@ -651,6 +897,27 @@
                                 <i data-lucide="plus"></i>
                                 <span>Lägg till rad</span>
                             </button>
+                        </div>
+                        
+                        <!-- Bulk Product Discount Selector Tool -->
+                        <div class="bulk-discount-tool">
+                            <span>
+                                <i data-lucide="percent"></i>
+                                Snabbrabatt på alla storlekar av denna produkt:
+                            </span>
+                            <select id="bulk-product-discount" class="custom-select" onchange="applyBulkProductDiscount(this.value)">
+                                <option value="">Välj rabattprocent...</option>
+                                <option value="0">0% (Ingen rabatt / Återställ)</option>
+                                <option value="10">10% rabatt</option>
+                                <option value="20">20% rabatt</option>
+                                <option value="30">30% rabatt</option>
+                                <option value="40">40% rabatt</option>
+                                <option value="50">50% rabatt</option>
+                                <option value="60">60% rabatt</option>
+                                <option value="70">70% rabatt</option>
+                                <option value="80">80% rabatt</option>
+                                <option value="90">90% rabatt</option>
+                            </select>
                         </div>
                         
                         <div class="variants-table-wrapper">
@@ -697,7 +964,7 @@
                 </div>
                 
                 <div class="manual-sku-input">
-                    <p class="scan-tip">Rikta mobilens kamera mot skokartongens streckkod eller skriv in koden manuellt nedan:</p>
+                    <p class="scan-tip">Rikta mobilens kamera mot produktens streckkod eller skriv in koden manuellt nedan:</p>
                     <div class="input-group">
                         <i data-lucide="keyboard" class="input-icon"></i>
                         <input type="text" id="manual-sku" placeholder="Skriv streckkod/SKU manuellt...">
@@ -739,7 +1006,7 @@
                         <i data-lucide="wand-2" class="wizard-icon"></i>
                         <div>
                             <h3>Intelligent tolkning klar!</h3>
-                            <p>Vi har analyserat filen och fördelat dina <strong>240 par skor</strong>. Vänligen granska fördelningen och ange prissättning för leveransen nedan innan du sparar.</p>
+                            <p>Vi har analyserat filen och fördelat dina inlästa produkter. Vänligen granska fördelningen och ange prissättning för leveransen nedan innan du sparar.</p>
                         </div>
                     </div>
                     
@@ -747,13 +1014,13 @@
                     <div class="batch-pricing-tool glass-panel">
                         <div class="pricing-tool-header">
                             <i data-lucide="coins" style="color:var(--color-primary);"></i>
-                            <h4>Sätt priser för detta sko-parti:</h4>
+                            <h4>Sätt priser för detta produktparti:</h4>
                         </div>
                         <div class="pricing-inputs">
                             <div class="price-input-container" style="flex: 1.5; min-width: 250px;">
                                 <label for="batch-total-package-price" style="color: var(--color-accent); font-weight:700;">Totalt paketpris för hela leveransen (valfritt)</label>
                                 <input type="number" id="batch-total-package-price" placeholder="T.ex. 20000 (Räknar ut snitt automatiskt!)" style="width:100%; border-color: rgba(236, 72, 153, 0.4);">
-                                <span style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Fyll i detta om du köpte alla 240 par för en klumpsumma.</span>
+                                <span style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Fyll i detta om du köpte hela leveransen för en klumpsumma.</span>
                             </div>
                             <div class="price-input-container">
                                 <label for="batch-purchase-price">Styckpris Inköp (kr)</label>
@@ -815,6 +1082,28 @@
             </div>
             <div class="modal-body">
                 <div class="settings-section">
+                    <h3>Mina Profilinställningar</h3>
+                    <p class="settings-desc">Ändra din e-postadress och ditt inloggningslösenord.</p>
+                    <div class="input-container" style="margin-bottom: 12px;">
+                        <label for="profile-email">E-postadress</label>
+                        <div class="input-group">
+                            <i data-lucide="mail" class="input-icon"></i>
+                            <input type="email" id="profile-email" placeholder="Din e-postadress...">
+                        </div>
+                    </div>
+                    <div class="input-container" style="margin-bottom: 15px;">
+                        <label for="profile-pw">Nytt Lösenord (lämna tomt för att behålla nuvarande)</label>
+                        <div class="input-group">
+                            <i data-lucide="lock" class="input-icon"></i>
+                            <input type="password" id="profile-pw" placeholder="Minst 4 tecken för att uppdatera...">
+                        </div>
+                    </div>
+                    <button id="save-profile-btn" class="btn btn-accent btn-sm">Spara profil</button>
+                    <p id="profile-msg" class="success-msg hide" style="margin-top:10px; color:var(--color-success); font-size:0.8rem; font-weight:600;"></p>
+                    <p id="profile-err-msg" class="error-msg hide" style="margin-top:10px; color:var(--color-danger); font-size:0.8rem; font-weight:600;"></p>
+                </div>
+                
+                <div class="settings-section divider">
                     <h3>Fjärråtkomst Lösenord</h3>
                     <p class="settings-desc">Lösenordet du anger på din mobiltelefon när du ansluter på distans.</p>
                     <div class="input-container">
@@ -826,6 +1115,15 @@
                     </div>
                     <button id="save-pw-btn" class="btn btn-primary btn-sm">Spara lösenord</button>
                     <p id="settings-msg" class="success-msg hide"></p>
+                </div>
+                
+                <div id="pwa-install-section" class="settings-section divider hide">
+                    <h3>Installera Appen</h3>
+                    <p class="settings-desc">Ladda ner och installera LAGERPRO som en app på din hemskärm för snabbare åtkomst.</p>
+                    <button id="pwa-install-btn" class="btn btn-accent btn-sm" style="display: flex; align-items: center; gap: 8px;">
+                        <i data-lucide="download" style="width:16px; height:16px;"></i>
+                        Installera LAGERPRO
+                    </button>
                 </div>
                 
                 <div class="settings-section divider">
@@ -851,7 +1149,7 @@
                     <img id="qr-image" src="" alt="QR Code">
                 </div>
                 <p id="qr-sku-text" class="qr-sku"></p>
-                <p class="qr-tip">Skriv ut denna kod och klistra på skokartongen för snabb skanning med mobilen.</p>
+                <p class="qr-tip">Skriv ut denna kod och klistra på produktförpackningen för snabb skanning med mobilen.</p>
                 <button id="print-qr-btn" class="btn btn-secondary btn-sm btn-full">
                     <i data-lucide="printer"></i>
                     <span>Skriv ut kod</span>
@@ -911,7 +1209,7 @@
                     <h3 style="margin:0 0 15px 0; font-size:1.1rem; color:var(--text-primary);">Skapa Nytt Projekt</h3>
                     <div class="settings-section" style="padding:15px; background:rgba(255,255,255,0.02); border:1px solid var(--border-light); border-radius:var(--radius-md); margin-bottom:20px;">
                         <div class="input-container" style="margin-bottom:15px;">
-                            <label for="new-project-name">Projektnamn (Skoart/Kategori)</label>
+                            <label for="new-project-name">Projektnamn (Kategori/Kampanj)</label>
                             <div class="input-group">
                                 <i data-lucide="folder-plus" class="input-icon"></i>
                                 <input type="text" id="new-project-name" placeholder="T.ex. Sommarkläder, Vinterkampanj..." style="width:100%;">
@@ -967,12 +1265,11 @@
                     </div>
                     
                     <div class="input-container" style="margin-bottom:20px;">
-                        <label for="user-projects-select">Tillåtna Projekt (Standardanvändare)</label>
-                        <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 8px 0;">Håll in CTRL för att välja flera projekt. Välj 'Alla' om de ska se allt.</p>
-                        <select id="user-projects-select" multiple class="custom-select" style="width:100%; height:120px; padding:8px;">
-                            <option value="all" selected>Alla projekt</option>
+                        <label>Tillåtna Projekt (Standardanvändare)</label>
+                        <p style="font-size:0.75rem; color:var(--text-muted); margin:0 0 10px 0;">Tryck för att välja vilka projekt användaren får se.</p>
+                        <div id="user-projects-checkboxes" class="project-checkbox-list">
                             <!-- Populated dynamically -->
-                        </select>
+                        </div>
                     </div>
                     
                     <button type="submit" class="btn btn-primary btn-full">
@@ -1024,6 +1321,55 @@
     </div>
 
     {% endif %}
+
+
+    <!-- Floating mobile cart button - placerad i body för korrekt fixed positioning -->
+    <button id="pos-mobile-cart-toggle" class="pos-mobile-cart-btn" onclick="toggleMobileCart(true)">
+        <i data-lucide="shopping-cart"></i>
+        <span>Visa Varukorg</span>
+        <span id="pos-mobile-cart-badge">0</span>
+    </button>
+
+    <!-- ==================== CUSTOM CONFIRM DIALOG ==================== -->
+    <div id="custom-confirm-overlay" class="custom-dialog-overlay hide" role="dialog" aria-modal="true">
+        <div class="custom-dialog-card" id="custom-confirm-card">
+            <div class="custom-dialog-icon-wrap" id="custom-confirm-icon-wrap">
+                <i data-lucide="alert-triangle" id="custom-confirm-icon"></i>
+            </div>
+            <h3 class="custom-dialog-title" id="custom-confirm-title">Bekräfta åtgärd</h3>
+            <p class="custom-dialog-msg" id="custom-confirm-msg"></p>
+            <div class="custom-dialog-actions">
+                <button id="custom-confirm-cancel-btn" class="btn btn-secondary">
+                    <i data-lucide="x"></i>
+                    <span id="custom-confirm-cancel-label">Avbryt</span>
+                </button>
+                <button id="custom-confirm-ok-btn" class="btn btn-danger">
+                    <i data-lucide="check" id="custom-confirm-ok-icon"></i>
+                    <span id="custom-confirm-ok-label">Bekräfta</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== CUSTOM ALERT DIALOG ==================== -->
+    <div id="custom-alert-overlay" class="custom-dialog-overlay hide" role="dialog" aria-modal="true">
+        <div class="custom-dialog-card">
+            <div class="custom-dialog-icon-wrap" id="custom-alert-icon-wrap">
+                <i data-lucide="info" id="custom-alert-icon"></i>
+            </div>
+            <h3 class="custom-dialog-title" id="custom-alert-title">Information</h3>
+            <p class="custom-dialog-msg" id="custom-alert-msg"></p>
+            <div class="custom-dialog-actions" style="justify-content:center;">
+                <button id="custom-alert-ok-btn" class="btn btn-primary" style="min-width:130px;">
+                    <i data-lucide="check"></i>
+                    <span>OK</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TOAST NOTIFICATION CONTAINER ==================== -->
+    <div id="toast-container"></div>
 
     <!-- Core App JS -->
     <script src="/static/js/app.js"></script>

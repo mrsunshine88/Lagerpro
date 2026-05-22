@@ -1,3 +1,92 @@
+// ==================== CUSTOM DIALOG HELPERS ====================
+function showConfirm({ title = 'Bekräfta åtgärd', msg = '', okLabel = 'Bekräfta', cancelLabel = 'Avbryt', type = 'warning', okBtnClass = 'btn-danger' } = {}) {
+    return new Promise(resolve => {
+        const overlay    = document.getElementById('custom-confirm-overlay');
+        const iconWrap   = document.getElementById('custom-confirm-icon-wrap');
+        const iconEl     = document.getElementById('custom-confirm-icon');
+        const titleEl    = document.getElementById('custom-confirm-title');
+        const msgEl      = document.getElementById('custom-confirm-msg');
+        const okBtn      = document.getElementById('custom-confirm-ok-btn');
+        const cancelBtn  = document.getElementById('custom-confirm-cancel-btn');
+        const okLabelEl  = document.getElementById('custom-confirm-ok-label');
+        const canLabelEl = document.getElementById('custom-confirm-cancel-label');
+        if (!overlay) { resolve(window.confirm(msg)); return; }
+        const iconMap = { warning: 'alert-triangle', danger: 'trash-2', info: 'info', success: 'check-circle-2', neutral: 'log-out' };
+        iconWrap.className = 'custom-dialog-icon-wrap icon-' + type;
+        iconEl.setAttribute('data-lucide', iconMap[type] || 'alert-triangle');
+        titleEl.textContent    = title;
+        msgEl.textContent      = msg;
+        okLabelEl.textContent  = okLabel;
+        canLabelEl.textContent = cancelLabel;
+        okBtn.className = 'btn ' + okBtnClass;
+        overlay.classList.remove('hide');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        function cleanup(result) {
+            overlay.classList.add('hide');
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            resolve(result);
+        }
+        function onOk()     { cleanup(true);  }
+        function onCancel() { cleanup(false); }
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+    });
+}
+
+function showAlert({ title, msg = '', type = 'info' } = {}) {
+    return new Promise(resolve => {
+        const overlay  = document.getElementById('custom-alert-overlay');
+        const iconWrap = document.getElementById('custom-alert-icon-wrap');
+        const iconEl   = document.getElementById('custom-alert-icon');
+        const titleEl  = document.getElementById('custom-alert-title');
+        const msgEl    = document.getElementById('custom-alert-msg');
+        const okBtn    = document.getElementById('custom-alert-ok-btn');
+        if (!overlay) { window.alert(msg); resolve(); return; }
+        const iconMap  = { warning: 'alert-triangle', danger: 'alert-circle', info: 'info', success: 'check-circle-2', neutral: 'info' };
+        const titleMap = { warning: 'Varning', danger: 'Fel', info: 'Information', success: 'Klart!', neutral: 'Information' };
+        iconWrap.className = 'custom-dialog-icon-wrap icon-' + type;
+        iconEl.setAttribute('data-lucide', iconMap[type] || 'info');
+        titleEl.textContent = title || titleMap[type] || 'Information';
+        msgEl.textContent   = msg;
+        overlay.classList.remove('hide');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        function onOk() {
+            overlay.classList.add('hide');
+            okBtn.removeEventListener('click', onOk);
+            resolve();
+        }
+        okBtn.addEventListener('click', onOk);
+    });
+}
+
+function showToast(msg, type = 'info', duration = 4500) {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const iconMap  = { success: 'check-circle-2', error: 'x-circle', warning: 'alert-triangle', info: 'info' };
+    const titleMap = { success: 'Klart!', error: 'Fel', warning: 'Varning', info: 'Info' };
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <div class="toast-icon"><i data-lucide="${iconMap[type] || 'info'}"></i></div>
+        <div class="toast-body">
+            <strong>${titleMap[type] || 'Info'}</strong>
+            <span>${msg}</span>
+        </div>
+        <button class="toast-close" title="Stäng"><i data-lucide="x"></i></button>
+        <div class="toast-progress" style="animation-duration:${duration}ms;"></div>
+    `;
+    container.appendChild(toast);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    function dismiss() {
+        toast.classList.add('toast-hiding');
+        toast.addEventListener('animationend', () => toast.remove(), { once: true });
+    }
+    toast.querySelector('.toast-close').addEventListener('click', (e) => { e.stopPropagation(); dismiss(); });
+    toast.addEventListener('click', dismiss);
+    setTimeout(dismiss, duration);
+}
+
 // ==================== STATE MANAGEMENT ====================
 let state = {
     products: [],
@@ -9,7 +98,8 @@ let state = {
     hideOutOfStock: true,
     userRole: 'user', // loaded dynamically ('admin' or 'user')
     userEmail: '',
-    allowedProjects: 'all'
+    allowedProjects: 'all',
+    barcodeTargetInput: null
 };
 
 let posCart = [];
@@ -20,6 +110,7 @@ let posSelectedColor = null;
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
+    initPWA();
 });
 
 async function initApp() {
@@ -32,17 +123,25 @@ async function initApp() {
     const loginBtn = document.getElementById('login-btn');
     if (loginBtn) {
         initLoginWall();
+        initPublicCatalog();
     } else {
         await loadSessionInfo();
         loadInventory();
         setupEventListeners();
+        fetchAndRefreshBookingsBadge();
+        setInterval(fetchAndRefreshBookingsBadge, 20000);
+        // Auto-refresh analytics every 60s when on analytics tab
+        setInterval(() => {
+            if (state.activeTab === 'analytics' && state.userRole === 'admin') {
+                loadAnalytics();
+            }
+        }, 60000);
     }
 }
 
 function detectSystemPaths() {
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn && !isLocal) {
+    if (logoutBtn) {
         logoutBtn.classList.remove('hide');
     }
     
@@ -227,9 +326,17 @@ function updateCategoryFilterDropdown() {
     const currentValue = dropdown.value;
     const currentHubValue = hubDropdown ? hubDropdown.value : 'all';
     
-    dropdown.innerHTML = '<option value="all">Alla skoarter (Alla tillåtna projekt)</option>';
-    if (hubDropdown) {
-        hubDropdown.innerHTML = '<option value="all">Alla projekt / Skoarter</option>';
+    // Only show "Alla" option if the user has access to all projects
+    const hasFullAccess = state.allowedProjects === 'all' || state.userRole === 'admin';
+    
+    if (hasFullAccess) {
+        dropdown.innerHTML = '<option value="all">Alla produktkategorier (Alla tillåtna projekt)</option>';
+        if (hubDropdown) {
+            hubDropdown.innerHTML = '<option value="all">Alla projekt / Produktkategorier</option>';
+        }
+    } else {
+        dropdown.innerHTML = '';
+        if (hubDropdown) hubDropdown.innerHTML = '';
     }
     
     Array.from(state.categories).sort().forEach(cat => {
@@ -246,8 +353,21 @@ function updateCategoryFilterDropdown() {
         }
     });
     
-    dropdown.value = currentValue;
-    if (hubDropdown) hubDropdown.value = currentHubValue;
+    // Restore previous selection if valid, otherwise pick first available option
+    if (currentValue && dropdown.querySelector(`option[value="${currentValue}"]`)) {
+        dropdown.value = currentValue;
+    } else {
+        dropdown.value = dropdown.options[0] ? dropdown.options[0].value : 'all';
+    }
+    state.activeFilterCategory = dropdown.value;
+    
+    if (hubDropdown) {
+        if (currentHubValue && hubDropdown.querySelector(`option[value="${currentHubValue}"]`)) {
+            hubDropdown.value = currentHubValue;
+        } else {
+            hubDropdown.value = hubDropdown.options[0] ? hubDropdown.options[0].value : 'all';
+        }
+    }
 }
 
 // ==================== RENDER PRODUCTS GRID ====================
@@ -363,9 +483,20 @@ function renderProducts() {
             variantsRowsHtml += `
                 <tr data-variant-id="${v.id}">
                     <td class="cell-size" style="font-weight:700; color:var(--color-primary);">${v.size}</td>
-                    <td class="cell-color">
-                        <span class="color-dot" style="background-color: ${getColorHex(v.color)};"></span>
-                        <span>${v.color}</span>
+                    <td>
+                        <div class="cell-color">
+                            <span class="color-dot" style="background-color: ${getColorHex(v.color)};"></span>
+                            <span>${v.color}</span>
+                        </div>
+                    </td>
+                    <td class="col-size-color" style="display:none;">
+                        <div class="cell-size-color-combined">
+                            <span class="cell-size-combined">${v.size}</span>
+                            <div class="cell-color-combined">
+                                <span class="color-dot" style="background-color: ${getColorHex(v.color)};"></span>
+                                <span>${v.color}</span>
+                            </div>
+                        </div>
                     </td>
                     <td>
                         <div class="stock-adjust-group">
@@ -411,16 +542,18 @@ function renderProducts() {
                     </h3>
                     ${p.description ? `<p>${p.description}</p>` : ''}
                 </div>
-                ${state.userRole === 'admin' ? `
                 <div class="prod-card-actions">
+                    ${state.userRole === 'admin' || state.userRole === 'user' ? `
                     <button class="btn btn-ghost btn-icon btn-sm" onclick="editProduct(${p.id})" title="Redigera">
                         <i data-lucide="edit-3" style="width: 16px; height: 16px;"></i>
                     </button>
+                    ` : ''}
+                    ${state.userRole === 'admin' ? `
                     <button class="btn btn-ghost btn-icon btn-sm" onclick="deleteProduct(${p.id})" style="color: var(--color-danger);" title="Ta bort">
                         <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
                     </button>
+                    ` : ''}
                 </div>
-                ` : ''}
             </div>
             <div class="product-card-body">
                 <table class="variants-list">
@@ -428,6 +561,7 @@ function renderProducts() {
                         <tr>
                             <th>Storlek</th>
                             <th>Färg</th>
+                            <th class="col-size-color" style="display:none;">Storlek / Färg</th>
                             <th>Lagersaldo</th>
                             <th>Status</th>
                             <th>${priceHeader}</th>
@@ -595,7 +729,7 @@ function renderAnalytics(data) {
         progressPercent.textContent = "0%";
         netProfitEl.className = "";
         netProfitSub.textContent = "Nettokassaflöde";
-        tipText.innerHTML = "Inga sko-paket registrerade än. Ladda upp en Excel-fil för att påbörja din nollpunktsanalys!";
+        tipText.innerHTML = "Inga varupaket registrerade än. Ladda upp en Excel-fil för att påbörja din nollpunktsanalys!";
     } else {
         const percentage = (be.total_revenue / be.total_investment) * 100;
         progressBar.style.width = `${Math.min(100, percentage)}%`;
@@ -618,7 +752,7 @@ function renderAnalytics(data) {
             netProfitSub.textContent = "Faktisk nettovinst";
             netProfitEl.textContent = "+" + formatMoney(be.net_profit);
             
-            tipText.innerHTML = `<span style="color:var(--color-success); font-weight:700;">Grattis! Hela din sko-investering är betald.</span> Varje krona du säljer för nu är ren nettovinst rakt ner i fickan!`;
+            tipText.innerHTML = `<span style="color:var(--color-success); font-weight:700;">Grattis! Hela din varuinvestering är betald.</span> Varje krona du säljer för nu är ren nettovinst rakt ner i fickan!`;
         }
     }
     
@@ -729,7 +863,7 @@ function renderAnalytics(data) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="9" style="text-align:center; color: var(--text-muted); padding:30px;">
-                    Inga försäljningar registrerade än. Minska lagersaldot på en sko för att skapa en försäljning!
+                    Inga försäljningar registrerade än. Minska lagersaldot på en produkt för att skapa en försäljning!
                 </td>
             </tr>
         `;
@@ -780,9 +914,12 @@ function openProjectInInventory(projectName) {
 
 // ==================== MANUAL ADD/EDIT PRODUCT ====================
 function openAddProductModal() {
-    document.getElementById('product-modal-title').textContent = "Registrera Ny Sko";
+    document.getElementById('product-modal-title').textContent = "Registrera Ny Produkt";
     document.getElementById('product-form').reset();
     document.getElementById('prod-desc').value = '';
+    
+    const bulkDiscount = document.getElementById('bulk-product-discount');
+    if (bulkDiscount) bulkDiscount.value = '';
     
     const tbody = document.getElementById('variants-tbody');
     tbody.innerHTML = '';
@@ -792,19 +929,27 @@ function openAddProductModal() {
     showModal('product-modal');
 }
 
-function addVariantRow(size = '', color = '', stock = '0', pPrice = '0', sPrice = '399', sku = '', oPrice = '') {
+function addVariantRow(size = '', color = '', stock = '0', pPrice = '0', sPrice = '399', sku = '', oPrice = '', variantId = '') {
     const tbody = document.getElementById('variants-tbody');
     const row = document.createElement('tr');
     row.className = 'variant-edit-row';
     const activeOPrice = oPrice || sPrice || '399';
     row.innerHTML = `
+        <input type="hidden" class="edit-variant-id" value="${variantId}">
         <td><input type="text" class="edit-size" required placeholder="T.ex. 42" value="${size}"></td>
         <td><input type="text" class="edit-color" required placeholder="T.ex. Svart" value="${color}"></td>
         <td><input type="number" class="edit-stock" required min="0" value="${stock}"></td>
         <td><input type="number" class="edit-p-price" required min="0" placeholder="Kostnad" value="${pPrice}"></td>
         <td><input type="number" class="edit-s-price" required min="0" placeholder="Säljpris" value="${sPrice}"></td>
         <td><input type="number" class="edit-o-price" required min="0" placeholder="Nypris" value="${activeOPrice}"></td>
-        <td><input type="text" class="edit-sku" placeholder="Auto-genereras" value="${sku}"></td>
+        <td>
+            <div class="sku-scan-container">
+                <input type="text" class="edit-sku" placeholder="Auto-genereras" value="${sku}">
+                <button type="button" class="btn-sku-scan" onclick="scanSkuForField(this)" title="Skanna med kameran">
+                    <i data-lucide="camera" style="width: 16px; height: 16px;"></i>
+                </button>
+            </div>
+        </td>
         <td>
             <button type="button" class="btn-remove-row" onclick="removeVariantRow(this)">
                 <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
@@ -817,13 +962,54 @@ function addVariantRow(size = '', color = '', stock = '0', pPrice = '0', sPrice 
     }
 }
 
+function scanSkuForField(button) {
+    const input = button.closest('.sku-scan-container').querySelector('.edit-sku');
+    state.barcodeTargetInput = input;
+    openScannerModal();
+}
+
+function focusNextSkuInput(currentInput) {
+    if (!currentInput) return;
+    const rows = Array.from(document.querySelectorAll('.variant-edit-row'));
+    const currentRow = currentInput.closest('tr');
+    const currentIndex = rows.indexOf(currentRow);
+    if (currentIndex !== -1 && currentIndex < rows.length - 1) {
+        const nextRow = rows[currentIndex + 1];
+        const nextInput = nextRow.querySelector('.edit-sku');
+        if (nextInput) {
+            nextInput.focus();
+            nextInput.select();
+        }
+    }
+}
+
 function removeVariantRow(button) {
     const rows = document.querySelectorAll('.variant-edit-row');
     if (rows.length > 1) {
         button.closest('tr').remove();
     } else {
-        alert("En produkt måste innehålla minst en storlek/variant.");
+        showToast("En produkt måste innehålla minst en storlek/variant.", 'warning');
     }
+}
+
+function applyBulkProductDiscount(val) {
+    if (val === '') return;
+    const discountPct = parseFloat(val);
+    const rows = document.querySelectorAll('.variant-edit-row');
+    rows.forEach(row => {
+        const oPriceInput = row.querySelector('.edit-o-price');
+        const sPriceInput = row.querySelector('.edit-s-price');
+        if (oPriceInput && sPriceInput) {
+            let oPrice = parseFloat(oPriceInput.value) || parseFloat(sPriceInput.value) || 0;
+            if (oPrice > 0) {
+                const newSPrice = discountPct === 0 ? oPrice : Math.round(oPrice * (1.0 - discountPct / 100.0));
+                sPriceInput.value = newSPrice;
+                if (!oPriceInput.value || parseFloat(oPriceInput.value) === 0) {
+                    oPriceInput.value = oPrice;
+                }
+            }
+        }
+    });
 }
 
 async function handleProductFormSubmit(e) {
@@ -851,7 +1037,7 @@ async function handleProductFormSubmit(e) {
     });
     
     if (variants.length === 0) {
-        alert("Vänligen lägg till minst en färg/storlek variant.");
+        showToast("Vänligen lägg till minst en färg/storlek variant.", 'warning');
         return;
     }
     
@@ -867,7 +1053,7 @@ async function handleProductFormSubmit(e) {
             closeModal('product-modal');
             loadInventory();
         } else {
-            alert("Kunde inte spara produkten: " + data.error);
+            showToast("Kunde inte spara produkten: " + data.error, 'error');
         }
     } catch (err) {
         console.error("Fel vid sparning av produkt:", err);
@@ -875,16 +1061,20 @@ async function handleProductFormSubmit(e) {
 }
 
 async function deleteProduct(productId) {
-    if (!confirm("Är du säker på att du vill radera denna produkt och alla dess storlekar/varianter permanent?")) {
-        return;
-    }
+    const confirmed = await showConfirm({
+        title: 'Radera produkt',
+        msg: 'Är du säker på att du vill radera denna produkt och alla dess storlekar/varianter permanent? Åtgärden kan inte ångras.',
+        type: 'danger',
+        okLabel: 'Ja, radera'
+    });
+    if (!confirmed) return;
     
     try {
         const res = await fetch(`/api/products/${productId}`, { method: 'DELETE' });
         if (res.ok) {
             loadInventory();
         } else {
-            alert("Misslyckades att ta bort produkten.");
+            showToast("Misslyckades att ta bort produkten.", 'error');
         }
     } catch (e) {
         console.error(e);
@@ -900,11 +1090,14 @@ function editProduct(productId) {
     document.getElementById('prod-category').value = product.category;
     document.getElementById('prod-desc').value = product.description || '';
     
+    const bulkDiscount = document.getElementById('bulk-product-discount');
+    if (bulkDiscount) bulkDiscount.value = '';
+    
     const tbody = document.getElementById('variants-tbody');
     tbody.innerHTML = '';
     
     product.variants.forEach(v => {
-        addVariantRow(v.size, v.color, v.stock, v.purchase_price, v.selling_price, v.sku, v.original_price);
+        addVariantRow(v.size, v.color, v.stock, v.purchase_price, v.selling_price, v.sku, v.original_price, v.id);
     });
     
     const form = document.getElementById('product-form');
@@ -920,6 +1113,7 @@ function editProduct(productId) {
         const variants = [];
         
         variantRows.forEach(row => {
+            const variantIdVal = row.querySelector('.edit-variant-id') ? row.querySelector('.edit-variant-id').value : '';
             const size = row.querySelector('.edit-size').value.trim();
             const color = row.querySelector('.edit-color').value.trim();
             const stock = parseInt(row.querySelector('.edit-stock').value) || 0;
@@ -929,15 +1123,17 @@ function editProduct(productId) {
             const sku = row.querySelector('.edit-sku').value.trim();
             
             if (size && color) {
-                variants.push({ size, color, stock, purchase_price, selling_price, original_price, sku });
+                const variantObj = { size, color, stock, purchase_price, selling_price, original_price, sku };
+                if (variantIdVal) {
+                    variantObj.id = parseInt(variantIdVal);
+                }
+                variants.push(variantObj);
             }
         });
         
         try {
-            await fetch(`/api/products/${productId}`, { method: 'DELETE' });
-            
-            const response = await fetch('/api/products', {
-                method: 'POST',
+            const response = await fetch(`/api/products/${productId}`, {
+                method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, category, description, variants })
             });
@@ -946,9 +1142,12 @@ function editProduct(productId) {
             if (data.success) {
                 closeModal('product-modal');
                 loadInventory();
+            } else {
+                showToast("Kunde inte spara produkten: " + data.error, 'error');
             }
         } catch (e) {
             console.error(e);
+            showToast("Ett fel uppstod vid uppdatering av produkten.", 'error');
         }
         
         form.onsubmit = handleProductFormSubmit;
@@ -1053,11 +1252,11 @@ async function handleUploadedExcelFile(file) {
             verifyStep.classList.remove('hide');
             renderImportWizardTable(data.proposals);
         } else {
-            alert(data.error || "Ett fel uppstod vid analys av filen.");
+            showToast(data.error || "Ett fel uppstod vid analys av filen.", 'error');
             openExcelModal();
         }
     } catch (e) {
-        alert("Det gick inte att skicka filen till servern.");
+        showToast("Det gick inte att skicka filen till servern.", 'error');
         openExcelModal();
     }
 }
@@ -1194,12 +1393,12 @@ async function saveConfirmedImport() {
             closeModal('excel-modal');
             loadInventory();
         } else {
-            alert("Det gick inte att slutföra importen: " + data.error);
+            showToast("Det gick inte att slutföra importen: " + data.error, 'error');
             verifyStep.classList.remove('hide');
             loadingStep.classList.add('hide');
         }
     } catch (e) {
-        alert("Ett nätverksfel uppstod.");
+        showToast("Ett nätverksfel uppstod.", 'error');
         verifyStep.classList.remove('hide');
         loadingStep.classList.add('hide');
     }
@@ -1208,7 +1407,18 @@ async function saveConfirmedImport() {
 // ==================== BARCODE SCANNER HANDLERS ====================
 function onScanSuccess(decodedText) {
     stopScanner();
-    searchScannedSKU(decodedText);
+    if (state.barcodeTargetInput) {
+        state.barcodeTargetInput.value = decodedText;
+        state.barcodeTargetInput.dispatchEvent(new Event('input', { bubbles: true }));
+        
+        const nextInputTarget = state.barcodeTargetInput;
+        state.barcodeTargetInput = null;
+        closeModal('scan-modal');
+        
+        focusNextSkuInput(nextInputTarget);
+    } else {
+        searchScannedSKU(decodedText);
+    }
 }
 
 function onScanFailure() {}
@@ -1217,7 +1427,18 @@ function handleManualSkuSearch() {
     const sku = document.getElementById('manual-sku').value.trim();
     if (!sku) return;
     stopScanner();
-    searchScannedSKU(sku);
+    if (state.barcodeTargetInput) {
+        state.barcodeTargetInput.value = sku;
+        state.barcodeTargetInput.dispatchEvent(new Event('input', { bubbles: true }));
+        
+        const nextInputTarget = state.barcodeTargetInput;
+        state.barcodeTargetInput = null;
+        closeModal('scan-modal');
+        
+        focusNextSkuInput(nextInputTarget);
+    } else {
+        searchScannedSKU(sku);
+    }
 }
 
 async function searchScannedSKU(sku) {
@@ -1238,22 +1459,53 @@ async function searchScannedSKU(sku) {
         if (data.success && data.found) {
             const v = data.variant;
             resultCard.className = 'scan-result-card';
+            
+            // Check if we're in POS mode (kassa tab active)
+            const inPosMode = document.body.classList.contains('pos-tab-active');
+            
             resultCard.innerHTML = `
                 <div class="result-prod-title">${v.product_name}</div>
                 <div class="result-meta">
-                    Skoart: <span>${v.product_category}</span> | 
+                    Kategori: <span>${v.product_category}</span> | 
                     Storlek: <span>${v.size}</span> | 
                     Färg: <span>${v.color}</span>
                 </div>
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                    <span>Aktuellt lagersaldo:</span>
-                    <div class="stock-adjust-group">
-                        <button class="btn-stock-adj" onclick="adjustScannedStock(${v.id}, -1)">-</button>
-                        <span class="stock-display" id="scan-stock-val">${v.stock}</span>
-                        <button class="btn-stock-adj" onclick="adjustScannedStock(${v.id}, 1)">+</button>
+                ${inPosMode ? `
+                <div style="margin-top:12px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; font-size:0.82rem; color:var(--text-muted);">
+                        <span>Lagersaldo: <strong style="color:var(--text-primary);">${v.stock} st</strong></span>
+                        ${v.stock === 0 ? '<span style="color:#ef4444; font-weight:700;">⚠️ Slut i lager</span>' : ''}
                     </div>
+                    <button class="btn btn-primary btn-full" style="padding:13px; font-size:0.95rem; font-weight:700; gap:8px;"
+                        onclick="addScannedToCart(${v.id}, '${v.product_name.replace(/'/g,"\\'")}', '${v.product_category.replace(/'/g,"\\'")}', '${v.size}', '${v.color}', ${v.selling_price}, ${v.original_price || v.selling_price}, ${v.stock})"
+                        ${v.stock === 0 ? 'disabled' : ''}>
+                        <i data-lucide="shopping-cart" style="width:18px;height:18px;"></i>
+                        Lägg i varukorg
+                    </button>
                 </div>
+                ` : `
+                <div style="margin-top:12px; display:flex; flex-direction:column; gap:12px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span>Aktuellt lagersaldo:</span>
+                        <div class="stock-adjust-group">
+                            <button class="btn-stock-adj" onclick="adjustScannedStock(${v.id}, -1)">-</button>
+                            <span class="stock-display" id="scan-stock-val">${v.stock}</span>
+                            <button class="btn-stock-adj" onclick="adjustScannedStock(${v.id}, 1)">+</button>
+                        </div>
+                    </div>
+                    ${(state.userRole === 'admin' || state.userRole === 'user') ? `
+                    <button class="btn btn-primary btn-full" style="padding:13px; font-size:0.95rem; font-weight:700; gap:8px;"
+                        onclick="closeModal('scan-modal'); editProduct(${v.product_id});">
+                        <i data-lucide="edit-3" style="width:18px;height:18px;"></i>
+                        Redigera produkt
+                    </button>
+                    ` : ''}
+                </div>
+                `}
             `;
+            
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+
             
             const mainRow = document.querySelector(`tr[data-variant-id="${v.id}"]`);
             if (mainRow) {
@@ -1270,7 +1522,7 @@ async function searchScannedSKU(sku) {
                 ${state.userRole === 'admin' ? `
                 <button class="btn btn-secondary btn-sm" onclick="closeModal('scan-modal'); openAddProductModal();">
                     <i data-lucide="plus"></i>
-                    <span>Registrera ny sko med denna kod</span>
+                    <span>Registrera ny produkt med denna kod</span>
                 </button>
                 ` : ''}
             `;
@@ -1292,6 +1544,54 @@ async function adjustScannedStock(variantId, change) {
     scanStockVal.textContent = newVal;
     
     await adjustStock(variantId, change);
+}
+
+function addScannedToCart(variantId, productName, category, size, color, sellingPrice, originalPrice, maxStock) {
+    if (maxStock <= 0) {
+        showToast('Denna variant är slut i lager.', 'warning');
+        return;
+    }
+    
+    const existing = posCart.find(item => item.variantId === variantId);
+    if (existing) {
+        if (existing.quantity + 1 > existing.maxStock) {
+            showToast(`Kan inte lägga till fler. Endast ${existing.maxStock} par finns i lager.`, 'warning');
+            return;
+        }
+        existing.quantity += 1;
+    } else {
+        // Apply order discount if active
+        const effectivePrice = posOrderDiscountPct > 0
+            ? Math.round(originalPrice * (1 - posOrderDiscountPct / 100))
+            : sellingPrice;
+        
+        posCart.push({
+            variantId,
+            productName,
+            category,
+            size,
+            color,
+            originalPrice,
+            sellingPrice: effectivePrice,
+            maxStock,
+            quantity: 1
+        });
+    }
+    
+    renderPosCart();
+    
+    // Show success feedback then close modal
+    const btn = document.querySelector('#scan-result .btn-primary');
+    if (btn) {
+        btn.innerHTML = '<i data-lucide="check-circle" style="width:18px;height:18px;"></i> Lagd i varukorgen!';
+        btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+        btn.disabled = true;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+    
+    setTimeout(() => {
+        closeModal('scan-modal');
+    }, 800);
 }
 
 // ==================== QR CODE VIEWER ====================
@@ -1335,6 +1635,66 @@ async function openSettingsModal() {
     showModal('settings-modal');
     document.getElementById('settings-msg').classList.add('hide');
     document.getElementById('settings-pw').value = '';
+    
+    // Populate profile settings
+    const emailInput = document.getElementById('profile-email');
+    const pwInput = document.getElementById('profile-pw');
+    const successMsg = document.getElementById('profile-msg');
+    const errMsg = document.getElementById('profile-err-msg');
+    
+    if (emailInput) emailInput.value = state.userEmail || '';
+    if (pwInput) pwInput.value = '';
+    if (successMsg) successMsg.classList.add('hide');
+    if (errMsg) errMsg.classList.add('hide');
+}
+
+async function handleSaveProfile() {
+    const email = document.getElementById('profile-email').value.trim();
+    const pw = document.getElementById('profile-pw').value.trim();
+    const successMsg = document.getElementById('profile-msg');
+    const errMsg = document.getElementById('profile-err-msg');
+    
+    successMsg.classList.add('hide');
+    errMsg.classList.add('hide');
+    
+    if (!email) {
+        errMsg.textContent = "E-postadressen får inte vara tom.";
+        errMsg.classList.remove('hide');
+        return;
+    }
+    
+    if (pw && pw.length < 4) {
+        errMsg.textContent = "Lösenordet måste vara minst 4 tecken långt.";
+        errMsg.classList.remove('hide');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/settings/profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, password: pw })
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            successMsg.textContent = data.message;
+            successMsg.classList.remove('hide');
+            state.userEmail = email; // Update local state email
+            
+            // Update greeting details in Welcome Hub
+            const hubEmailEl = document.getElementById('hub-user-email');
+            if (hubEmailEl) hubEmailEl.textContent = email;
+            
+            document.getElementById('profile-pw').value = ''; // Clear pw field
+        } else {
+            errMsg.textContent = data.error || "Kunde inte spara profilinställningar.";
+            errMsg.classList.remove('hide');
+        }
+    } catch (err) {
+        errMsg.textContent = "Ett anslutningsfel uppstod. Kontrollera nätverket.";
+        errMsg.classList.remove('hide');
+    }
 }
 
 async function handleSavePassword() {
@@ -1342,7 +1702,7 @@ async function handleSavePassword() {
     const msg = document.getElementById('settings-msg');
     
     if (pw.length < 4) {
-        alert("Lösenordet måste vara minst 4 tecken långt.");
+        showToast("Lösenordet måste vara minst 4 tecken långt.", 'warning');
         return;
     }
     
@@ -1359,10 +1719,10 @@ async function handleSavePassword() {
             msg.classList.remove('hide');
             setTimeout(() => msg.classList.add('hide'), 3000);
         } else {
-            alert(data.error);
+            showToast(data.error, 'error');
         }
     } catch (e) {
-        alert("Kunde inte spara lösenord.");
+        showToast("Kunde inte spara lösenord.", 'error');
     }
 }
 
@@ -1371,11 +1731,13 @@ function switchTab(targetTab) {
     const hubBtn = document.getElementById('tab-hub-btn');
     const posBtn = document.getElementById('tab-pos-btn');
     const invBtn = document.getElementById('tab-inventory-btn');
+    const bookBtn = document.getElementById('tab-bookings-btn');
     const anaBtn = document.getElementById('tab-analytics-btn');
     
     const hubContent = document.getElementById('tab-hub-content');
     const posContent = document.getElementById('tab-pos-content');
     const invContent = document.getElementById('tab-inventory-content');
+    const bookContent = document.getElementById('tab-bookings-content');
     const anaContent = document.getElementById('tab-analytics-content');
     
     if (!invBtn || !anaBtn) return;
@@ -1385,13 +1747,22 @@ function switchTab(targetTab) {
     if (hubBtn) hubBtn.classList.remove('active');
     if (posBtn) posBtn.classList.remove('active');
     invBtn.classList.remove('active');
+    if (bookBtn) bookBtn.classList.remove('active');
     anaBtn.classList.remove('active');
     
     if (hubContent) hubContent.classList.add('hide');
     if (posContent) posContent.classList.add('hide');
     invContent.classList.add('hide');
+    if (bookContent) bookContent.classList.add('hide');
     anaContent.classList.add('hide');
     
+    // Visa/dölj "Visa Varukorg"-knappen beroende på aktiv flik
+    if (targetTab === 'pos') {
+        document.body.classList.add('pos-tab-active');
+    } else {
+        document.body.classList.remove('pos-tab-active');
+    }
+
     if (targetTab === 'hub') {
         if (hubBtn) hubBtn.classList.add('active');
         if (hubContent) hubContent.classList.remove('hide');
@@ -1400,13 +1771,19 @@ function switchTab(targetTab) {
         if (posContent) posContent.classList.remove('hide');
         loadPosProducts();
         renderPosCart();
+        // Uppdatera Lucide-ikoner i den nytillagda knappen
+        if (window.lucide) lucide.createIcons();
     } else if (targetTab === 'inventory') {
         invBtn.classList.add('active');
         invContent.classList.remove('hide');
         loadInventory();
+    } else if (targetTab === 'bookings') {
+        if (bookBtn) bookBtn.classList.add('active');
+        if (bookContent) bookContent.classList.remove('hide');
+        loadBookings();
     } else {
         if (state.userRole !== 'admin') {
-            alert("Endast administratörer har tillgång till Ekonomi & Statistik.");
+            showToast("Endast administratörer har tillgång till Ekonomi & Statistik.", 'warning');
             switchTab('hub');
             return;
         }
@@ -1463,6 +1840,26 @@ async function loadAdminUsers() {
         
         users.forEach(u => {
             const row = document.createElement('tr');
+            
+            const isMaster = u.id === 1 || u.email.trim().toLowerCase() === 'apersson508@gmail.com' || u.email.trim().toLowerCase() === 'apersson508@gmai..com';
+            let actionsHtml = '';
+            if (isMaster) {
+                actionsHtml = `
+                    <span class="badge" style="font-size:0.75rem; background:rgba(212,163,89,0.1); color:#d4a359; border:1px solid rgba(212,163,89,0.2); padding: 4px 10px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;">
+                        <i data-lucide="shield-check" style="width:14px; height:14px;"></i>Skyddat Huvudkonto
+                    </span>
+                `;
+            } else {
+                actionsHtml = `
+                    <button class="btn btn-ghost btn-icon btn-xs" onclick="openEditUserModal(${u.id}, '${u.email}', '${u.role}', '${u.allowed_projects}')" title="Redigera" style="margin-right:5px; padding:4px;">
+                        <i data-lucide="edit-3" style="width:14px; height:14px;"></i>
+                    </button>
+                    <button class="btn btn-ghost btn-icon btn-xs" onclick="deleteUser(${u.id})" style="color:var(--color-danger); padding:4px;" title="Ta bort">
+                        <i data-lucide="trash-2" style="width:14px; height:14px;"></i>
+                    </button>
+                `;
+            }
+            
             row.innerHTML = `
                 <td style="font-weight:600;">${u.email}</td>
                 <td>
@@ -1474,12 +1871,7 @@ async function loadAdminUsers() {
                     ${u.allowed_projects === 'all' ? 'Alla projekt' : u.allowed_projects}
                 </td>
                 <td style="text-align:right;">
-                    <button class="btn btn-ghost btn-icon btn-xs" onclick="openEditUserModal(${u.id}, '${u.email}', '${u.role}', '${u.allowed_projects}')" title="Redigera" style="margin-right:5px; padding:4px;">
-                        <i data-lucide="edit-3" style="width:14px; height:14px;"></i>
-                    </button>
-                    <button class="btn btn-ghost btn-icon btn-xs" onclick="deleteUser(${u.id})" style="color:var(--color-danger); padding:4px;" title="Ta bort">
-                        <i data-lucide="trash-2" style="width:14px; height:14px;"></i>
-                    </button>
+                    ${actionsHtml}
                 </td>
             `;
             tbody.appendChild(row);
@@ -1501,22 +1893,51 @@ async function loadAdminProjects() {
         list.innerHTML = '';
         
         const projSelect = document.getElementById('user-projects-select');
-        projSelect.innerHTML = '<option value="all">Alla projekt</option>';
+        if (projSelect) {
+            projSelect.innerHTML = '<option value="all">Alla projekt</option>';
+        }
+        
+        if (projects.length === 0) {
+            list.innerHTML = '<li style="color:var(--text-muted); font-size:0.85rem; padding:12px 0; text-align:center;">Inga projekt skapade ännu.</li>';
+        }
         
         projects.sort().forEach(p => {
             const li = document.createElement('li');
-            li.style.display = 'flex';
-            li.style.justify = 'space-between';
-            li.style.alignItems = 'center';
-            li.style.padding = '8px 12px';
-            li.style.background = 'rgba(255,255,255,0.01)';
-            li.style.border = '1px solid var(--border-light)';
-            li.style.borderRadius = 'var(--radius-sm)';
+            li.className = 'project-item';
             
+            // Header: project name + delete button
             li.innerHTML = `
-                <span style="font-weight:600;">${p}</span>
-                <div class="badge-container" style="display:flex; align-items:center; gap:10px;">
-                    <span class="badge" style="font-size:0.7rem; color:var(--text-muted);">Laddar uppgifter...</span>
+                <div class="project-item-header">
+                    <span class="project-item-title">
+                        <i data-lucide="folder" style="width:14px;height:14px;vertical-align:middle;margin-right:6px;color:var(--color-primary);"></i>
+                        ${p}
+                    </span>
+                    <button class="project-item-delete-btn" onclick="deleteProject('${p.replace(/'/g, "\\'")}')">
+                        <i data-lucide="trash-2"></i>
+                        Ta bort
+                    </button>
+                </div>
+                <div class="project-item-controls">
+                    <div class="project-control-group">
+                        <label>Kampanjrabatt:</label>
+                        <select class="custom-select" onchange="setProjectDiscount('${p.replace(/'/g, "\\'")}', this.value)">
+                            <option value="0">Ingen</option>
+                            <option value="10">10% Rabatt</option>
+                            <option value="20">20% Rabatt</option>
+                            <option value="30">30% Rabatt</option>
+                            <option value="40">40% Rabatt</option>
+                            <option value="50">50% Rabatt</option>
+                            <option value="60">60% Rabatt</option>
+                            <option value="70">70% Rabatt</option>
+                            <option value="80">80% Rabatt</option>
+                            <option value="90">90% Rabatt</option>
+                        </select>
+                    </div>
+                    <div class="project-control-group">
+                        <label>Klumpsumma inköp:</label>
+                        <input type="number" class="custom-select" placeholder="0" style="text-align:right;" onchange="saveProjectInvestment('${p.replace(/'/g, "\\'")}', this.value)">
+                        <span class="project-unit">kr</span>
+                    </div>
                 </div>
             `;
             list.appendChild(li);
@@ -1530,47 +1951,56 @@ async function loadAdminProjects() {
                 const discount = discountData.discount_percent || 0;
                 const investment = invData.investment || 0;
                 
-                const selectHtml = `
-                    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:16px;">
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <label style="font-size:0.75rem; color:var(--text-secondary); margin:0;">Kampanjrabatt:</label>
-                            <select class="custom-select" style="padding:4px 8px; font-size:0.75rem; min-width:90px; border-color:var(--color-primary); background:var(--bg-card);" onchange="setProjectDiscount('${p}', this.value)">
-                                <option value="0" ${discount === 0 ? 'selected' : ''}>Ingen</option>
-                                <option value="10" ${discount === 10 ? 'selected' : ''}>10% Rabatt</option>
-                                <option value="20" ${discount === 20 ? 'selected' : ''}>20% Rabatt</option>
-                                <option value="30" ${discount === 30 ? 'selected' : ''}>30% Rabatt</option>
-                                <option value="40" ${discount === 40 ? 'selected' : ''}>40% Rabatt</option>
-                                <option value="50" ${discount === 50 ? 'selected' : ''}>50% Rabatt</option>
-                                <option value="60" ${discount === 60 ? 'selected' : ''}>60% Rabatt</option>
-                                <option value="70" ${discount === 70 ? 'selected' : ''}>70% Rabatt</option>
-                                <option value="80" ${discount === 80 ? 'selected' : ''}>80% Rabatt</option>
-                                <option value="90" ${discount === 90 ? 'selected' : ''}>90% Rabatt</option>
-                            </select>
-                        </div>
-                        <div style="display:flex; align-items:center; gap:6px;">
-                            <label style="font-size:0.75rem; color:var(--text-secondary); margin:0;">Klumpsumma inköp:</label>
-                            <input type="number" class="custom-select" placeholder="0 kr" value="${investment > 0 ? investment : ''}" style="width:85px; padding:4px 8px; font-size:0.75rem; border-color:var(--color-primary); background:var(--bg-card); text-align:right;" onchange="saveProjectInvestment('${p}', this.value)">
-                            <span style="font-size:0.75rem; color:var(--text-muted);">kr</span>
-                        </div>
-                    </div>
-                `;
-                const container = li.querySelector('.badge-container');
-                if (container) container.innerHTML = selectHtml;
+                // Set discount select value
+                const sel = li.querySelector('.project-item-controls select');
+                if (sel) sel.value = String(discount);
+                
+                // Set investment input value
+                const inv = li.querySelector('.project-item-controls input[type="number"]');
+                if (inv) inv.value = investment > 0 ? investment : '';
             })
-            .catch(err => {
-                const container = li.querySelector('.badge-container');
-                if (container) container.innerHTML = `<span class="badge stock-low" style="font-size:0.7rem;">Error</span>`;
+            .catch(() => {
+                // silently ignore per-project load errors
             });
             
-            const opt = document.createElement('option');
-            opt.value = p;
-            opt.textContent = p;
-            projSelect.appendChild(opt);
+            if (projSelect) {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.textContent = p;
+                projSelect.appendChild(opt);
+            }
         });
         
         if (typeof lucide !== 'undefined') lucide.createIcons();
     } catch (e) {
         console.error("Fel vid laddning av projekt:", e);
+    }
+}
+
+async function deleteProject(projectName) {
+    const confirmed = await showConfirm({
+        title: `Radera projekt "${projectName}"?`,
+        msg: 'Detta tar permanent bort alla produkter, varianter, försäljning och bokningar som tillhör projektet. Åtgärden kan inte ångras!',
+        type: 'danger',
+        okLabel: 'Ja, radera allt'
+    });
+    if (!confirmed) return;
+    
+    try {
+        const res = await fetch('/api/projects', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: projectName })
+        });
+        const data = await res.json();
+        if (data.success) {
+            await loadAdminProjects();
+            await loadInventory();
+        } else {
+            showToast(data.error || 'Kunde inte radera projektet.', 'error');
+        }
+    } catch (e) {
+        showToast('Nätverksfel – kunde inte radera projektet.', 'error');
     }
 }
 
@@ -1587,10 +2017,10 @@ async function setProjectDiscount(project, discountPercent) {
             await loadInventory();
             console.log(`Rabatt på ${project} satt till ${discountPercent}%`);
         } else {
-            alert(data.error || "Kunde inte spara rabatt.");
+            showToast(data.error || "Kunde inte spara rabatt.", 'error');
         }
     } catch (e) {
-        alert("Ett nätverksfel uppstod.");
+        showToast("Ett nätverksfel uppstod.", 'error');
     }
 }
 
@@ -1607,10 +2037,10 @@ async function saveProjectInvestment(project, investmentVal) {
             loadAnalytics();
             console.log(`Sparade investering på ${project}: ${investmentVal} kr`);
         } else {
-            alert(data.error || "Kunde inte spara investering.");
+            showToast(data.error || "Kunde inte spara investering.", 'error');
         }
     } catch (e) {
-        alert("Ett nätverksfel uppstod.");
+        showToast("Ett nätverksfel uppstod.", 'error');
     }
 }
 
@@ -1631,44 +2061,65 @@ async function handleCreateProject() {
             await loadInventory();
         } else {
             const d = await res.json();
-            alert(d.error);
+            showToast(d.error, 'error');
         }
     } catch (e) {
-        alert("Fel vid skapande av projekt.");
+        showToast("Fel vid skapande av projekt.", 'error');
     }
 }
 
 async function populateUserProjectsSelect(selectedProjects = []) {
-    const select = document.getElementById('user-projects-select');
-    if (!select) return;
-    
-    select.innerHTML = '<option value="all">Alla projekt</option>';
-    
+    const container = document.getElementById('user-projects-checkboxes');
+    if (!container) return;
+    container.innerHTML = '';
+
+    // "Alla projekt" toggle row
+    const allChecked = selectedProjects.includes('all');
+    const allRow = document.createElement('label');
+    allRow.className = 'proj-check-row proj-check-all';
+    allRow.innerHTML = `
+        <input type="checkbox" id="proj-cb-all" value="all" ${allChecked ? 'checked' : ''}>
+        <span class="proj-check-icon"><i data-lucide="layers" style="width:13px;height:13px;"></i></span>
+        <span>Alla projekt</span>
+    `;
+    container.appendChild(allRow);
+
+    const allCb = allRow.querySelector('input');
+    allCb.addEventListener('change', () => {
+        if (allCb.checked) {
+            // Uncheck all specific projects
+            container.querySelectorAll('input[type="checkbox"]:not(#proj-cb-all)').forEach(cb => cb.checked = false);
+        }
+    });
+
     try {
         const response = await fetch('/api/projects');
         if (response.ok) {
             const projects = await response.json();
-            
             projects.sort().forEach(p => {
-                const opt = document.createElement('option');
-                opt.value = p;
-                opt.textContent = p;
-                select.appendChild(opt);
+                const row = document.createElement('label');
+                row.className = 'proj-check-row';
+                const isChecked = !allChecked && selectedProjects.includes(p);
+                row.innerHTML = `
+                    <input type="checkbox" value="${p}" ${isChecked ? 'checked' : ''}>
+                    <span class="proj-check-icon"><i data-lucide="folder" style="width:13px;height:13px;"></i></span>
+                    <span>${p}</span>
+                `;
+                const cb = row.querySelector('input');
+                cb.addEventListener('change', () => {
+                    if (cb.checked) {
+                        // Uncheck "Alla projekt" when a specific one is chosen
+                        allCb.checked = false;
+                    }
+                });
+                container.appendChild(row);
             });
-            
-            // Set selected projects
-            for (let i = 0; i < select.options.length; i++) {
-                const opt = select.options[i];
-                if (selectedProjects.includes('all')) {
-                    opt.selected = (opt.value === 'all');
-                } else {
-                    opt.selected = selectedProjects.includes(opt.value);
-                }
-            }
         }
     } catch (e) {
         console.error("Kunde inte hämta projekt för användarhanteraren:", e);
     }
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 async function openCreateUserModal() {
@@ -1709,10 +2160,10 @@ async function handleUserFormSubmit(e) {
     const password = document.getElementById('user-password-input').value;
     const role = document.getElementById('user-role-select').value;
     
-    // Grab selected projects
-    const select = document.getElementById('user-projects-select');
-    const selectedVals = Array.from(select.selectedOptions).map(opt => opt.value);
-    const allowed_projects = selectedVals.includes('all') ? 'all' : selectedVals.join(',');
+    // Grab selected projects from checkboxes
+    const container = document.getElementById('user-projects-checkboxes');
+    const checkedBoxes = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+    const allowed_projects = checkedBoxes.includes('all') || checkedBoxes.length === 0 ? 'all' : checkedBoxes.join(',');
     
     const isEdit = id !== '';
     const url = isEdit ? `/api/users/${id}` : '/api/users';
@@ -1734,15 +2185,21 @@ async function handleUserFormSubmit(e) {
             closeModal('user-form-modal');
             await loadAdminUsers();
         } else {
-            alert(data.error || "Misslyckades att spara användaren.");
+            showToast(data.error || "Misslyckades att spara användaren.", 'error');
         }
     } catch (e) {
-        alert("Ett nätverksfel uppstod.");
+        showToast("Ett nätverksfel uppstod.", 'error');
     }
 }
 
 async function deleteUser(id) {
-    if (!confirm("Är du säker på att du vill radera denna användare permanent?")) return;
+    const confirmed = await showConfirm({
+        title: 'Radera användare',
+        msg: 'Är du säker på att du vill radera denna användare permanent? Åtgärden kan inte ångras.',
+        type: 'danger',
+        okLabel: 'Ja, radera'
+    });
+    if (!confirmed) return;
     
     try {
         const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
@@ -1750,10 +2207,10 @@ async function deleteUser(id) {
         if (data.success) {
             await loadAdminUsers();
         } else {
-            alert(data.error || "Kunde inte radera användare.");
+            showToast(data.error || "Kunde inte radera användare.", 'error');
         }
     } catch (e) {
-        alert("Nätverksfel vid radering.");
+        showToast("Nätverksfel vid radering.", 'error');
     }
 }
 
@@ -1770,6 +2227,12 @@ function setupEventListeners() {
 
     document.getElementById('tab-pos-btn').addEventListener('click', () => switchTab('pos'));
     document.getElementById('tab-inventory-btn').addEventListener('click', () => switchTab('inventory'));
+    
+    const bookingsTabBtn = document.getElementById('tab-bookings-btn');
+    if (bookingsTabBtn) {
+        bookingsTabBtn.addEventListener('click', () => switchTab('bookings'));
+    }
+    
     document.getElementById('tab-analytics-btn').addEventListener('click', () => switchTab('analytics'));
     
     document.getElementById('refresh-analytics-btn').addEventListener('click', loadAnalytics);
@@ -1818,7 +2281,10 @@ function setupEventListeners() {
     document.getElementById('add-product-btn').addEventListener('click', openAddProductModal);
     document.getElementById('empty-add-btn').addEventListener('click', openAddProductModal);
     document.getElementById('import-excel-btn').addEventListener('click', openExcelModal);
-    document.getElementById('scan-shortcut-btn').addEventListener('click', openScannerModal);
+    const scanShortcutBtn = document.getElementById('scan-shortcut-btn');
+    if (scanShortcutBtn) {
+        scanShortcutBtn.addEventListener('click', openScannerModal);
+    }
     document.getElementById('settings-btn').addEventListener('click', openSettingsModal);
     
     // Admin Panel Listeners
@@ -1842,7 +2308,15 @@ function setupEventListeners() {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async () => {
-            if (confirm("Vill du logga ut från fjärråtkomsten?")) {
+            const ok = await showConfirm({
+                title: 'Logga ut',
+                msg: 'Vill du logga ut från LAGERPRO?',
+                type: 'neutral',
+                okLabel: 'Logga ut',
+                okBtnClass: 'btn-secondary',
+                cancelLabel: 'Avbryt'
+            });
+            if (ok) {
                 await fetch('/api/logout', { method: 'POST' });
                 window.location.reload();
             }
@@ -1852,6 +2326,11 @@ function setupEventListeners() {
     document.getElementById('confirm-import-btn').addEventListener('click', saveConfirmedImport);
     document.getElementById('back-to-upload-btn').addEventListener('click', openExcelModal);
     document.getElementById('save-pw-btn').addEventListener('click', handleSavePassword);
+    
+    const saveProfileBtn = document.getElementById('save-profile-btn');
+    if (saveProfileBtn) {
+        saveProfileBtn.addEventListener('click', handleSaveProfile);
+    }
     
     document.getElementById('manual-sku-btn').addEventListener('click', handleManualSkuSearch);
     document.getElementById('manual-sku').addEventListener('keypress', (e) => {
@@ -1883,6 +2362,28 @@ function setupEventListeners() {
     }
     
     setupExcelDropEvents();
+
+    // Intercept Enter key in variant SKU edits to prevent submit and shift focus
+    const variantsTbodyEl = document.getElementById('variants-tbody');
+    if (variantsTbodyEl) {
+        variantsTbodyEl.addEventListener('keydown', (e) => {
+            if (e.target && e.target.classList.contains('edit-sku')) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    focusNextSkuInput(e.target);
+                }
+            }
+        });
+
+        // Auto-select SKU text on focus
+        variantsTbodyEl.addEventListener('focusin', (e) => {
+            if (e.target && e.target.classList.contains('edit-sku')) {
+                setTimeout(() => {
+                    e.target.select();
+                }, 50);
+            }
+        });
+    }
 }
 
 function showModal(modalId) {
@@ -1890,6 +2391,7 @@ function showModal(modalId) {
     if (modal) {
         modal.classList.remove('hide');
         document.body.style.overflow = 'hidden';
+        document.body.classList.add('modal-active');
     }
 }
 
@@ -1898,8 +2400,16 @@ function closeModal(modalId) {
     if (modal) {
         modal.classList.add('hide');
         document.body.style.overflow = '';
+        
+        // Remove modal-active if no other modal overlays are currently visible
+        const openModals = document.querySelectorAll('.modal-overlay:not(.hide)');
+        if (openModals.length === 0) {
+            document.body.classList.remove('modal-active');
+        }
+        
         if (modalId === 'scan-modal') {
             stopScanner();
+            state.barcodeTargetInput = null;
         }
     }
 }
@@ -1945,13 +2455,23 @@ function loadPosProducts() {
     
     const posFilter = document.getElementById('pos-category-filter');
     if (posFilter && posFilter.options.length <= 1) {
-        posFilter.innerHTML = '<option value="all">Alla kategorier</option>';
+        // Only show "Alla kategorier" if the user has access to all projects
+        const hasFullAccess = state.allowedProjects === 'all' || state.userRole === 'admin';
+        if (hasFullAccess) {
+            posFilter.innerHTML = '<option value="all">Alla kategorier</option>';
+        } else {
+            posFilter.innerHTML = '';
+        }
         Array.from(state.categories).sort().forEach(cat => {
             const opt = document.createElement('option');
             opt.value = cat;
             opt.textContent = cat;
             posFilter.appendChild(opt);
         });
+        // If no "all" option and nothing pre-selected, pick first
+        if (!hasFullAccess && posFilter.options.length > 0 && !posFilter.value) {
+            posFilter.value = posFilter.options[0].value;
+        }
     }
     
     const filtered = state.products.filter(p => {
@@ -1963,7 +2483,7 @@ function loadPosProducts() {
     });
     
     if (filtered.length === 0) {
-        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted);">Inga skor matchar sökningen.</div>`;
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted);">Inga produkter matchar sökningen.</div>`;
         return;
     }
     
@@ -1976,41 +2496,65 @@ function loadPosProducts() {
         const originalPrice = baseVariant ? (baseVariant.original_price || baseVariant.selling_price) : 0;
         const currentSellingPrice = baseVariant ? baseVariant.selling_price : 0;
         
-        // Effective price = apply order-level discount to original_price if set, else use selling_price
-        const effectivePrice = posOrderDiscountPct > 0
-            ? Math.round(originalPrice * (1 - posOrderDiscountPct / 100))
-            : currentSellingPrice;
+        // Grid always shows the standard campaign price (selling_price)
+        const effectivePrice = currentSellingPrice;
         
         const showDiscount = effectivePrice < originalPrice && originalPrice > 0;
         const discountPct = showDiscount ? Math.round((1 - effectivePrice / originalPrice) * 100) : 0;
         
         const card = document.createElement('div');
-        card.className = 'glass-card fade-in';
-        card.style.cssText = `padding:15px;cursor:${hasStock ? 'pointer' : 'not-allowed'};opacity:${hasStock ? '1' : '0.5'};transition:all 0.2s ease;display:flex;flex-direction:column;justify-content:space-between;border:1px solid var(--border-light);border-radius:var(--radius-md);position:relative;overflow:hidden;`;
-        
+        card.className = `pos-product-card glass-card${hasStock ? '' : ' out-of-stock'}`;
+
         if (hasStock) {
-            card.onmouseover = () => { card.style.borderColor = 'var(--color-primary)'; card.style.transform = 'translateY(-2px)'; card.style.boxShadow = 'var(--shadow-primary)'; };
-            card.onmouseout = () => { card.style.borderColor = 'var(--border-light)'; card.style.transform = 'translateY(0)'; card.style.boxShadow = 'none'; };
             card.onclick = () => openPosVariantSelection(p.id);
         }
-        
+
+        // Build size pills (show first 4, then +N)
+        const inStockVariants = p.variants.filter(v => v.stock > 0);
+        let sizePillsHtml = '';
+        const maxShow = 4;
+        inStockVariants.slice(0, maxShow).forEach(v => {
+            sizePillsHtml += `<span style="background:rgba(139,92,246,0.15);color:var(--color-primary);border:1px solid rgba(139,92,246,0.3);border-radius:4px;padding:1px 6px;font-size:0.65rem;font-weight:600;">${v.size}</span>`;
+        });
+        if (inStockVariants.length > maxShow) {
+            sizePillsHtml += `<span style="color:var(--text-muted);font-size:0.65rem;">+${inStockVariants.length - maxShow}</span>`;
+        }
+        if (!hasStock) {
+            sizePillsHtml = `<span style="color:#ef4444;font-size:0.65rem;font-weight:600;">Slut i lager</span>`;
+        }
+
+        // Image: use first in-stock variant's SKU, fallback to first variant
+        const imgVariant = inStockVariants[0] || p.variants[0];
+        const imgSku = imgVariant ? imgVariant.sku : '';
+
         card.innerHTML = `
-            <div>
-                <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
-                    <span class="badge" style="font-size:0.65rem;background:rgba(255,255,255,0.04);color:var(--text-muted);">${p.category}</span>
-                    <span class="stock-badge ${hasStock ? 'stock-ok' : 'stock-empty'}" style="font-size:0.65rem;padding:1px 6px;">${hasStock ? totalStock + ' par' : 'Slut'}</span>
-                </div>
-                <h4 style="margin:0 0 10px 0;font-size:1rem;font-weight:700;color:var(--text-primary);">${p.name}</h4>
+            <div class="pos-shoe-photo">
+                ${imgSku
+                    ? `<img src="/static/shoe_images/${imgSku}.jpg" alt="${p.name}" onerror="this.parentElement.innerHTML='<span class=\\'pos-img-placeholder\\'>👟</span>'">`
+                    : `<span class="pos-img-placeholder">👟</span>`
+                }
             </div>
-            <div style="display:flex;flex-direction:column;gap:2px;">
-                ${showDiscount ? `<span style="color:var(--text-muted);font-size:0.72rem;text-decoration:line-through;">${formatMoney(originalPrice)}</span>` : `<span style="color:var(--text-muted);font-size:0.72rem;">Nypris: ${formatMoney(originalPrice)}</span>`}
-                <div style="display:flex;align-items:center;gap:6px;">
-                    <strong style="color:${showDiscount ? '#4ade80' : 'var(--color-primary)'};font-size:1.05rem;">${formatMoney(effectivePrice)}</strong>
-                    ${showDiscount ? `<span class="badge" style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:0.65rem;font-weight:700;padding:1px 5px;">-${discountPct}%</span>` : ''}
+            <div class="pos-product-card-info">
+                <div class="pos-product-card-badges">
+                    <span class="badge" style="font-size:0.6rem;background:rgba(255,255,255,0.04);color:var(--text-muted);padding:1px 5px;">${p.category}</span>
+                    <span class="stock-badge ${hasStock ? 'stock-ok' : 'stock-empty'}" style="font-size:0.6rem;padding:1px 5px;">${hasStock ? totalStock + ' par' : 'Slut'}</span>
+                </div>
+                <h4 style="margin:0 0 5px 0;font-size:0.9rem;font-weight:700;color:var(--text-primary);line-height:1.2;">${p.name}</h4>
+                <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px;">${sizePillsHtml}</div>
+                <div style="display:flex;flex-direction:column;gap:1px;margin-top:auto;">
+                    ${showDiscount
+                        ? `<span style="color:var(--text-muted);font-size:0.68rem;text-decoration:line-through;">${formatMoney(originalPrice)}</span>`
+                        : `<span style="color:var(--text-muted);font-size:0.68rem;">Nypris: ${formatMoney(originalPrice)}</span>`
+                    }
+                    <div style="display:flex;align-items:center;gap:5px;">
+                        <strong style="color:${showDiscount ? '#4ade80' : 'var(--color-primary)'};font-size:1rem;">${formatMoney(effectivePrice)}</strong>
+                        ${showDiscount ? `<span class="badge" style="background:rgba(239,68,68,0.15);color:#ef4444;font-size:0.6rem;font-weight:700;padding:1px 5px;">-${discountPct}%</span>` : ''}
+                    </div>
                 </div>
             </div>
         `;
         grid.appendChild(card);
+
     });
 }
 
@@ -2115,7 +2659,7 @@ function addSelectedToPosCart() {
         if (existing.quantity + 1 <= v.stock) {
             existing.quantity += 1;
         } else {
-            alert(`Kan inte lägga till fler. Endast ${v.stock} par finns i lager.`);
+            showToast(`Kan inte lägga till fler. Endast ${v.stock} par finns i lager.`, 'warning');
             return;
         }
     } else {
@@ -2160,7 +2704,7 @@ function renderPosCart() {
         cartItemsContainer.innerHTML = `
             <div style="text-align:center;padding:40px 20px;color:var(--text-muted);font-size:0.85rem;">
                 <i data-lucide="shopping-cart" style="width:36px;height:36px;stroke-width:1.5;margin-bottom:10px;opacity:0.5;"></i>
-                <p>Varukorgen är tom.<br>Klicka på en sko för att lägga till.</p>
+                <p>Varukorgen är tom.<br>Klicka på en produkt för att lägga till.</p>
             </div>`;
         if (typeof lucide !== 'undefined') lucide.createIcons();
         document.getElementById('pos-total-items-count').textContent = '0 st';
@@ -2168,6 +2712,10 @@ function renderPosCart() {
         document.getElementById('pos-checkout-btn').disabled = true;
         document.getElementById('pos-original-price-row').style.display = 'none';
         document.getElementById('pos-savings-row').style.display = 'none';
+        
+        // Update mobile cart badge
+        const mobBadge = document.getElementById('pos-mobile-cart-badge');
+        if (mobBadge) mobBadge.textContent = '0';
         return;
     }
     
@@ -2234,6 +2782,10 @@ function renderPosCart() {
         savingsRow.style.display = 'none';
     }
     
+    // Update mobile cart badge
+    const mobBadge = document.getElementById('pos-mobile-cart-badge');
+    if (mobBadge) mobBadge.textContent = totalQty;
+    
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -2245,7 +2797,7 @@ function adjustPosCartQty(index, change) {
     if (newQty <= 0) {
         removePosCartItem(index);
     } else if (newQty > item.maxStock) {
-        alert(`Kan inte öka antal. Endast ${item.maxStock} par finns i lager.`);
+        showToast(`Kan inte öka antal. Endast ${item.maxStock} par finns i lager.`, 'warning');
     } else {
         item.quantity = newQty;
         renderPosCart();
@@ -2306,16 +2858,805 @@ async function checkoutPosOrder() {
                 renderPosCart();
             }, 2000);
         } else {
-            alert(data.error || "Ett fel uppstod under betalningen.");
+            showToast(data.error || "Ett fel uppstod under betalningen.", 'error');
             checkoutBtn.disabled = false;
             checkoutBtn.innerHTML = oldText;
             if (typeof lucide !== 'undefined') lucide.createIcons();
         }
     } catch (e) {
-        alert("Ett nätverksfel uppstod.");
+        showToast("Ett nätverksfel uppstod.", 'error');
         checkoutBtn.disabled = false;
         checkoutBtn.innerHTML = oldText;
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 }
+
+function toggleMobileCart(show) {
+    const posWrapper = document.querySelector('.pos-wrapper');
+    if (posWrapper) {
+        if (show) {
+            posWrapper.classList.add('show-cart');
+        } else {
+            posWrapper.classList.remove('show-cart');
+        }
+    }
+}
+
+
+// ==================== PUBLIC CUSTOMER CATALOG & BOOKING SYSTEM ====================
+
+// Public State Filter Properties
+state.publicProducts = [];
+state.publicSelectedCategory = 'all';
+state.publicSelectedSize = 'all';
+state.publicSearchQuery = '';
+state.publicMaxPrice = null;
+
+// In-memory active booking variables
+let activeBookingVariant = null;
+
+function initPublicCatalog() {
+    // Show login modal trigger
+    const showLoginBtn = document.getElementById('show-login-modal-btn');
+    if (showLoginBtn) {
+        showLoginBtn.addEventListener('click', () => {
+            const loginModal = document.getElementById('login-modal-overlay');
+            if (loginModal) {
+                loginModal.classList.remove('hide');
+                document.body.style.overflow = 'hidden';
+            }
+        });
+    }
+
+    // Public Filters
+    const publicSearchInput = document.getElementById('public-search');
+    if (publicSearchInput) {
+        publicSearchInput.addEventListener('input', (e) => {
+            state.publicSearchQuery = e.target.value.toLowerCase().trim();
+            renderPublicCatalog();
+        });
+    }
+
+    const publicCategoryFilter = document.getElementById('public-category-filter');
+    if (publicCategoryFilter) {
+        publicCategoryFilter.addEventListener('change', (e) => {
+            state.publicSelectedCategory = e.target.value;
+            renderPublicCatalog();
+        });
+    }
+
+    const publicSizeFilter = document.getElementById('public-size-filter');
+    if (publicSizeFilter) {
+        publicSizeFilter.addEventListener('change', (e) => {
+            state.publicSelectedSize = e.target.value;
+            renderPublicCatalog();
+        });
+    }
+
+    const publicMaxPriceInput = document.getElementById('public-max-price');
+    if (publicMaxPriceInput) {
+        publicMaxPriceInput.addEventListener('input', (e) => {
+            const val = e.target.value.trim();
+            state.publicMaxPrice = val !== '' ? parseFloat(val) : null;
+            renderPublicCatalog();
+        });
+    }
+
+    // Form submission
+    const bookingForm = document.getElementById('public-booking-form');
+    if (bookingForm) {
+        bookingForm.addEventListener('submit', handlePublicBookingSubmit);
+    }
+
+    // Load actual products
+    loadPublicProducts();
+}
+
+async function loadPublicProducts() {
+    try {
+        const response = await fetch('/api/public/products');
+        if (!response.ok) throw new Error("Kunde inte läsa produktregister.");
+        const data = await response.json();
+        
+        state.publicProducts = data;
+        
+        // Extract filters dynamically
+        populatePublicFilters();
+        
+        // Initial render
+        renderPublicCatalog();
+    } catch (e) {
+        console.error("Fel vid laddning av kundkatalog:", e);
+        const grid = document.getElementById('public-catalog-grid');
+        if (grid) {
+            grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--color-danger); padding: 40px 10px;">
+                <i data-lucide="alert-triangle" style="width:40px; height:40px; margin-bottom:10px;"></i>
+                <h3>Ett fel uppstod vid laddning av katalogen</h3>
+                <p>Vänligen försök igen senare.</p>
+            </div>`;
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        }
+    }
+}
+
+function populatePublicFilters() {
+    const categories = new Set();
+    const sizes = new Set();
+    
+    state.publicProducts.forEach(p => {
+        if (p.category) categories.add(p.category.trim());
+        if (p.variants) {
+            p.variants.forEach(v => {
+                if (v.stock > 0 && v.size) {
+                    sizes.add(v.size.toString().trim());
+                }
+            });
+        }
+    });
+
+    const categorySelect = document.getElementById('public-category-filter');
+    if (categorySelect) {
+        categorySelect.innerHTML = '<option value="all">Alla kategorier</option>';
+        Array.from(categories).sort().forEach(cat => {
+            categorySelect.innerHTML += `<option value="${cat}">${cat}</option>`;
+        });
+    }
+
+    const sizeSelect = document.getElementById('public-size-filter');
+    if (sizeSelect) {
+        sizeSelect.innerHTML = '<option value="all">Alla storlekar</option>';
+        Array.from(sizes).sort((a,b) => parseFloat(a) - parseFloat(b)).forEach(sz => {
+            sizeSelect.innerHTML += `<option value="${sz}">Storlek ${sz}</option>`;
+        });
+    }
+}
+
+function renderPublicCatalog() {
+    const grid = document.getElementById('public-catalog-grid');
+    const emptyState = document.getElementById('public-empty-state');
+    if (!grid) return;
+    
+    grid.innerHTML = '';
+    let matchesCount = 0;
+    
+    state.publicProducts.forEach(p => {
+        // Apply search query filter (name, description, category, size, color)
+        const matchSearch = !state.publicSearchQuery || 
+            p.name.toLowerCase().includes(state.publicSearchQuery) || 
+            (p.description && p.description.toLowerCase().includes(state.publicSearchQuery)) ||
+            p.category.toLowerCase().includes(state.publicSearchQuery) ||
+            (p.variants && p.variants.some(v => 
+                v.size.toString().toLowerCase().includes(state.publicSearchQuery) ||
+                (v.color && v.color.toLowerCase().includes(state.publicSearchQuery))
+            ));
+            
+        // Apply category filter
+        const matchCategory = state.publicSelectedCategory === 'all' || p.category === state.publicSelectedCategory;
+        
+        // Filter variants that match size filter
+        let filteredVariants = p.variants || [];
+        if (state.publicSelectedSize !== 'all') {
+            filteredVariants = filteredVariants.filter(v => v.size.toString() === state.publicSelectedSize.toString());
+        }
+        
+        // Also filter variants by search query on size/color if search is active
+        if (state.publicSearchQuery) {
+            const q = state.publicSearchQuery;
+            const sizeOrColorMatch = filteredVariants.some(v => 
+                v.size.toString().toLowerCase().includes(q) ||
+                (v.color && v.color.toLowerCase().includes(q))
+            );
+            // Only filter to matching variants if query is a size/color match (not a name/desc/cat match)
+            const nameDescCatMatch = p.name.toLowerCase().includes(q) || 
+                (p.description && p.description.toLowerCase().includes(q)) ||
+                p.category.toLowerCase().includes(q);
+            if (!nameDescCatMatch && sizeOrColorMatch) {
+                filteredVariants = filteredVariants.filter(v =>
+                    v.size.toString().toLowerCase().includes(q) ||
+                    (v.color && v.color.toLowerCase().includes(q))
+                );
+            }
+        }
+        
+        // Filter variants by max price if set
+        if (state.publicMaxPrice !== null) {
+            filteredVariants = filteredVariants.filter(v => v.selling_price <= state.publicMaxPrice);
+        }
+        
+        // Product must have variants and match search/category filters to be displayed
+        if (matchSearch && matchCategory && filteredVariants.length > 0) {
+            matchesCount++;
+            
+            // Render the card
+            const defaultVariant = filteredVariants[0];
+            const card = document.createElement('div');
+            card.className = 'product-card glass-card';
+            card.id = `public-product-${p.id}`;
+            
+            // Calculate initial discount
+            const hasDiscount = defaultVariant.original_price > defaultVariant.selling_price;
+            const discountPct = hasDiscount ? Math.round(((defaultVariant.original_price - defaultVariant.selling_price) / defaultVariant.original_price) * 100) : 0;
+            
+            // Build the variants pills
+            let pillsHtml = '';
+            filteredVariants.forEach((v, index) => {
+                pillsHtml += `<button type="button" class="variant-pill-btn ${index === 0 ? 'active' : ''}" 
+                    data-variant-id="${v.id}"
+                    onclick="selectPublicVariant(this, ${p.id}, ${v.id}, '${v.sku}', ${v.selling_price}, ${v.original_price}, ${v.stock}, '${v.size}', '${v.color}')">
+                    ${v.size} (${v.color})
+                </button>`;
+            });
+
+            card.innerHTML = `
+                <div class="product-card-badge">
+                    <span class="category-tag">${p.category}</span>
+                </div>
+                
+                <!-- Variant image wrapper with fallback shadow box -->
+                <div class="shoe-photo-box">
+                    <img id="img-${p.id}" src="/static/shoe_images/${defaultVariant.sku}.jpg" alt="${p.name}" onerror="handlePublicImageError(this, '${p.name}')">
+                </div>
+                
+                <div class="product-card-body">
+                    <h3 class="product-title">${p.name}</h3>
+                    <p class="product-desc" style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:15px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">
+                        ${p.description || 'Ingen tillgänglig beskrivning.'}
+                    </p>
+                    
+                    <div class="selection-section" style="margin-bottom:15px;">
+                        <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:6px; font-weight:600; text-transform:uppercase;">Välj variant (storlek/färg):</span>
+                        <div class="variant-pills-container" style="display:flex; flex-wrap:wrap; gap:6px; max-height: 80px; overflow-y: auto; padding-right:4px;">
+                            ${pillsHtml}
+                        </div>
+                    </div>
+                    
+                    <div class="card-footer-row" style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; border-top:1px solid var(--border-light); padding-top:12px;">
+                        <div class="price-block" style="display:flex; flex-direction:column; gap:2px;">
+                            <div style="display:flex; align-items:baseline; gap:8px;">
+                                <span class="selling-price" id="price-${p.id}" style="font-size:1.15rem; font-weight:800; color:var(--text-primary);">${defaultVariant.selling_price} kr</span>
+                                <span class="original-price ${hasDiscount ? '' : 'hide'}" id="orig-price-${p.id}" style="font-size:0.85rem; text-decoration:line-through; color:var(--text-muted);">${defaultVariant.original_price} kr</span>
+                            </div>
+                            <span class="discount-badge ${hasDiscount ? '' : 'hide'}" id="discount-${p.id}" style="font-size:0.7rem; background:rgba(239,68,68,0.15); color:var(--color-danger); border:1px solid rgba(239,68,68,0.25); border-radius:4px; padding:1px 6px; width:fit-content; font-weight:700;">-${discountPct}% rabatt</span>
+                        </div>
+                        
+                        <button type="button" class="btn btn-accent btn-sm" id="book-btn-${p.id}" style="display:flex; align-items:center; gap:6px; padding:8px 14px;" 
+                            onclick="openPublicBookingModal(${p.id}, ${defaultVariant.id}, '${p.name}', '${defaultVariant.size}', '${defaultVariant.color}', ${defaultVariant.selling_price})">
+                            <i data-lucide="calendar-plus" style="width:14px; height:14px;"></i>
+                            <span>Boka</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+            grid.appendChild(card);
+        }
+    });
+
+    if (matchesCount === 0) {
+        emptyState.classList.remove('hide');
+    } else {
+        emptyState.classList.add('hide');
+    }
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function handlePublicImageError(img, name) {
+    img.style.display = 'none';
+    const parent = img.parentElement;
+    parent.classList.add('fallback-box');
+    
+    // Check if fallback label already exists to prevent duplicate icons
+    if (!parent.querySelector('.fallback-icon-wrapper')) {
+        parent.innerHTML = `
+            <div class="fallback-icon-wrapper" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; width:100%; height:100%;">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" style="width:48px; height:48px; color:var(--color-primary); opacity:0.65;">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                    <line x1="12" y1="22.08" x2="12" y2="12"/>
+                </svg>
+                <span style="font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">Bild saknas</span>
+            </div>
+        `;
+    }
+}
+
+function selectPublicVariant(btn, productId, variantId, sku, sellingPrice, originalPrice, stock, size, color) {
+    const siblings = btn.parentElement.querySelectorAll('.variant-pill-btn');
+    siblings.forEach(s => s.classList.remove('active'));
+    btn.classList.add('active');
+    
+    // Update Image
+    const img = document.getElementById(`img-${productId}`);
+    if (img) {
+        const parent = img.parentElement;
+        if (parent.classList.contains('fallback-box')) {
+            parent.classList.remove('fallback-box');
+            parent.innerHTML = `<img id="img-${productId}" src="/static/shoe_images/${sku}.jpg" alt="Produkt" onerror="handlePublicImageError(this, 'Produkt')">`;
+        } else {
+            img.src = `/static/shoe_images/${sku}.jpg`;
+            img.style.display = 'block';
+        }
+    }
+    
+    // Update Prices
+    const priceEl = document.getElementById(`price-${productId}`);
+    const origPriceEl = document.getElementById(`orig-price-${productId}`);
+    const discountEl = document.getElementById(`discount-${productId}`);
+    
+    if (priceEl) priceEl.textContent = `${sellingPrice} kr`;
+    
+    if (originalPrice > sellingPrice) {
+        if (origPriceEl) {
+            origPriceEl.textContent = `${originalPrice} kr`;
+            origPriceEl.classList.remove('hide');
+        }
+        if (discountEl) {
+            const discountPct = Math.round(((originalPrice - sellingPrice) / originalPrice) * 100);
+            discountEl.textContent = `-${discountPct}% rabatt`;
+            discountEl.classList.remove('hide');
+        }
+    } else {
+        if (origPriceEl) origPriceEl.classList.add('hide');
+        if (discountEl) discountEl.classList.add('hide');
+    }
+    
+    // Update booking button onclick
+    const bookBtn = document.getElementById(`book-btn-${productId}`);
+    if (bookBtn) {
+        bookBtn.setAttribute('onclick', `openPublicBookingModal(${productId}, ${variantId}, 'Produkt', '${size}', '${color}', ${sellingPrice})`);
+    }
+}
+
+function openPublicBookingModal(productId, variantId, productName, size, color, price) {
+    // Lookup full product name from state for accurate summary
+    const prod = state.publicProducts.find(p => p.id === productId);
+    const finalName = prod ? prod.name : productName;
+    const finalCategory = prod ? prod.category : '';
+    
+    activeBookingVariant = {
+        id: variantId,
+        productName: finalName,
+        category: finalCategory,
+        size: size,
+        color: color,
+        price: price
+    };
+    
+    document.getElementById('booking-variant-id').value = variantId;
+    
+    const summary = document.getElementById('public-booking-summary');
+    if (summary) {
+        summary.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <h4 style="margin:0; color:var(--text-primary); font-size:1rem;">${finalName}</h4>
+                    <span style="font-size:0.75rem; color:var(--text-muted);">${finalCategory} &bull; Färg: ${color}</span>
+                </div>
+                <div style="text-align:right;">
+                    <span style="font-size:1.1rem; font-weight:800; color:var(--color-accent); display:block;">Storlek ${size}</span>
+                    <span style="font-size:0.85rem; color:var(--text-secondary); font-weight:600;">Pris: ${price} kr</span>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Reset fields
+    document.getElementById('booking-first-name').value = '';
+    document.getElementById('booking-last-name').value = '';
+    document.getElementById('booking-phone').value = '';
+    
+    const modal = document.getElementById('public-booking-modal');
+    if (modal) {
+        modal.classList.remove('hide');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+async function handlePublicBookingSubmit(e) {
+    e.preventDefault();
+    
+    const variantId = parseInt(document.getElementById('booking-variant-id').value);
+    const firstName = document.getElementById('booking-first-name').value.trim();
+    const lastName = document.getElementById('booking-last-name').value.trim();
+    const phone = document.getElementById('booking-phone').value.trim();
+    
+    if (!variantId || !firstName || !lastName || !phone) {
+        showToast("Vänligen fyll i alla fält.", 'warning');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/public/bookings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                variant_id: variantId,
+                first_name: firstName,
+                last_name: lastName,
+                phone: phone
+            })
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            closeModal('public-booking-modal');
+            
+            // Open success modal
+            const successModal = document.getElementById('booking-success-modal');
+            if (successModal) {
+                successModal.classList.remove('hide');
+                document.body.style.overflow = 'hidden';
+            }
+            
+            // Reload catalog list to update stock amounts
+            loadPublicProducts();
+        } else {
+            showToast(data.error || "Det gick inte att slutföra bokningen.", 'error');
+        }
+    } catch (err) {
+        showToast("Ett nätverksfel uppstod. Kontrollera din anslutning.", 'error');
+    }
+}
+
+
+// ==================== ADMIN RESERVATIONS / BOOKINGS CRM ====================
+
+// Cache bookings data
+state.bookings = [];
+
+async function loadBookings() {
+    const tbody = document.getElementById('bookings-tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-muted); padding:30px;">Laddar bokningar...</td></tr>';
+    
+    try {
+        const response = await fetch('/api/bookings');
+        if (response.status === 401) {
+            window.location.reload();
+            return;
+        }
+        const data = await response.json();
+        state.bookings = data;
+        renderBookings();
+    } catch (e) {
+        console.error("Fel vid laddning av bokningar:", e);
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--color-danger); padding:30px;">Kunde inte hämta bokningar från servern.</td></tr>';
+    }
+}
+
+function renderBookings() {
+    updateBookingsBadge();
+    const tbody = document.getElementById('bookings-tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    const searchQuery = (document.getElementById('bookings-search-input')?.value || '').toLowerCase().trim();
+    const statusFilter = document.getElementById('bookings-status-filter')?.value || 'all';
+    
+    let filteredBookings = state.bookings;
+    
+    // Status Filter
+    if (statusFilter !== 'all') {
+        filteredBookings = filteredBookings.filter(b => b.status === statusFilter);
+    }
+    
+    // Search Query Filter
+    if (searchQuery) {
+        filteredBookings = filteredBookings.filter(b => {
+            const customerName = `${b.customer_first_name} ${b.customer_last_name}`.toLowerCase();
+            return customerName.includes(searchQuery) ||
+                b.customer_phone.includes(searchQuery) ||
+                b.product_name.toLowerCase().includes(searchQuery) ||
+                (b.sku && b.sku.toLowerCase().includes(searchQuery));
+        });
+    }
+    
+    if (filteredBookings.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color: var(--text-muted); padding:40px;">Inga bokningar matchar dina filter.</td></tr>';
+        return;
+    }
+    
+    filteredBookings.forEach(b => {
+        const tr = document.createElement('tr');
+        
+        // Status Badge
+        let statusBadge = '';
+        if (b.status === 'pending') {
+            statusBadge = '<span class="badge" style="white-space: nowrap; background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(245,158,11,0.3);">Ny</span>';
+        } else if (b.status === 'reserved') {
+            statusBadge = '<span class="badge" style="white-space: nowrap; background:rgba(59,130,246,0.15); color:#60a5fa; border:1px solid rgba(59,130,246,0.3);">Bokad</span>';
+        } else if (b.status === 'confirmed') {
+            statusBadge = '<span class="badge" style="white-space: nowrap; background:rgba(16,185,129,0.15); color:#34d399; border:1px solid rgba(16,185,129,0.3);">Köpt</span>';
+        } else {
+            statusBadge = '<span class="badge" style="white-space: nowrap; background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.3);">Nekad</span>';
+        }
+        
+        // Actions
+        let actionsHtml = '';
+        if (b.status === 'pending') {
+            actionsHtml = `
+                <div style="display:flex; gap:8px; justify-content:flex-end;">
+                    <button class="btn btn-sm btn-booking-blue" style="padding:5px 10px; font-size:0.75rem; display:flex; align-items:center; gap:4px;" onclick="reserveBooking(${b.id})" title="Markera som bokad och lägg undan produkterna">
+                        <i data-lucide="bookmark" style="width:12px; height:12px;"></i>
+                        <span>Bokad</span>
+                    </button>
+                    <button class="btn btn-sm btn-booking-red" style="padding:5px 10px; font-size:0.75rem; display:flex; align-items:center; gap:4px;" onclick="cancelBooking(${b.id})" title="Neka / Avbryt bokning">
+                        <i data-lucide="x" style="width:12px; height:12px;"></i>
+                        <span>Neka</span>
+                    </button>
+                </div>
+            `;
+        } else if (b.status === 'reserved') {
+            actionsHtml = `
+                <div style="display:flex; gap:8px; justify-content:flex-end;">
+                    <button class="btn btn-sm btn-booking-green" style="padding:5px 10px; font-size:0.75rem; display:flex; align-items:center; gap:4px;" onclick="confirmBooking(${b.id})" title="Godkänn och logga som köp">
+                        <i data-lucide="check" style="width:12px; height:12px;"></i>
+                        <span>Köpt</span>
+                    </button>
+                    <button class="btn btn-sm btn-booking-red" style="padding:5px 10px; font-size:0.75rem; display:flex; align-items:center; gap:4px;" onclick="cancelBooking(${b.id})" title="Neka / Avbryt bokning">
+                        <i data-lucide="x" style="width:12px; height:12px;"></i>
+                        <span>Neka</span>
+                    </button>
+                </div>
+            `;
+        } else {
+            actionsHtml = '<span style="font-size:0.75rem; color:var(--text-muted);">Slutförd</span>';
+        }
+        
+        // Date Formatter
+        const dateStr = b.created_at ? new Date(b.created_at.replace(' ', 'T')).toLocaleDateString('sv-SE', {
+            hour: '2-digit',
+            minute: '2-digit'
+        }) : 'Okänt datum';
+
+        tr.innerHTML = `
+            <td data-label="Bokning ID">#${b.id}</td>
+            <td data-label="Produkt &amp; Detaljer">
+                <strong style="color:var(--text-primary); font-size: 0.95rem;">${b.product_name}</strong>
+                <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top: 4px;">
+                    Storlek <span class="badge stock-ok" style="font-weight:700; padding: 2px 6px; font-size: 0.7rem; margin-right: 4px;">${b.size}</span> &bull; Färg: ${b.color} &bull; Pris: <strong>${b.selling_price} kr</strong>
+                </span>
+                <span style="display:block; font-size:0.68rem; color:var(--text-muted); opacity: 0.7; margin-top: 2px;">
+                    ${b.product_category || 'Produkt'} &bull; ${b.sku || 'Inget SKU'}
+                </span>
+            </td>
+            <td data-label="Kund &amp; Kontakt">
+                <strong style="color:var(--text-primary); font-size: 0.95rem;">${b.customer_first_name} ${b.customer_last_name}</strong>
+                <span style="display:block; font-size:0.75rem; margin-top: 4px;">
+                    <a href="tel:${b.customer_phone}" style="color:var(--color-accent); text-decoration:none; font-weight:600;">
+                        <i data-lucide="phone" style="width:10px; height:10px; display:inline-block; vertical-align:middle; margin-right:4px;"></i>${b.customer_phone}
+                    </a>
+                </span>
+                <span style="display:block; font-size:0.7rem; color:var(--text-muted); margin-top: 2px;">
+                    <i data-lucide="calendar" style="width:10px; height:10px; display:inline-block; vertical-align:middle; margin-right:4px;"></i>${dateStr}
+                </span>
+            </td>
+            <td data-label="Status">${statusBadge}</td>
+            <td data-label="Åtgärder" style="text-align:right;">${actionsHtml}</td>
+        `;
+        
+        tbody.appendChild(tr);
+    });
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function filterBookings() {
+    renderBookings();
+}
+
+async function confirmBooking(bookingId) {
+    const confirmed = await showConfirm({
+        title: 'Bekräfta köp',
+        msg: 'Vill du bekräfta att kunden har köpt produkterna? Detta registrerar en försäljning i kassaflödet och låser bokningen.',
+        type: 'success',
+        okLabel: 'Ja, bekräfta köp',
+        okBtnClass: 'btn-success'
+    });
+    if (!confirmed) return;
+    
+    try {
+        const response = await fetch(`/api/bookings/${bookingId}/confirm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            loadBookings();
+            
+            // If the user has the analytics open, we should flag reload
+            if (state.activeTab === 'analytics') {
+                loadAnalytics();
+            }
+        } else {
+            showToast(data.error || "Kunde inte godkänna bokningen.", 'error');
+        }
+    } catch (e) {
+        showToast("Ett nätverksfel uppstod vid bekräftelsen.", 'error');
+    }
+}
+
+async function cancelBooking(bookingId) {
+    const confirmed = await showConfirm({
+        title: 'Avbryt bokning',
+        msg: 'Vill du neka/avbryta denna bokning? Produkten återförs automatiskt till lagersaldot och görs tillgänglig igen.',
+        type: 'warning',
+        okLabel: 'Ja, avbryt bokning'
+    });
+    if (!confirmed) return;
+    
+    try {
+        const response = await fetch(`/api/bookings/${bookingId}/cancel`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            loadBookings();
+        } else {
+            showToast(data.error || "Kunde inte avbryta bokningen.", 'error');
+        }
+    } catch (e) {
+        showToast("Ett nätverksfel uppstod vid avbrutandet.", 'error');
+    }
+}
+
+async function reserveBooking(bookingId) {
+    try {
+        const response = await fetch(`/api/bookings/${bookingId}/reserve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            loadBookings();
+        } else {
+            showToast(data.error || "Kunde inte markera som bokad.", 'error');
+        }
+    } catch (e) {
+        showToast("Ett nätverksfel uppstod.", 'error');
+    }
+}
+
+// ==================== BOOKINGS REAL-TIME NOTIFICATIONS ====================
+function updateBookingsBadge() {
+    const badge = document.getElementById('bookings-notif-badge');
+    if (!badge) return;
+    
+    // Count pending bookings only
+    const pendingCount = state.bookings.filter(b => b.status === 'pending').length;
+    
+    if (pendingCount > 0) {
+        badge.textContent = pendingCount;
+        badge.classList.remove('hide');
+    } else {
+        badge.textContent = '0';
+        badge.classList.add('hide');
+    }
+}
+
+async function fetchAndRefreshBookingsBadge() {
+    // If the login button exists, we are in customer view. Do not poll to avoid 401s.
+    if (document.getElementById('login-btn')) return;
+    
+    try {
+        const response = await fetch('/api/bookings');
+        if (response.status === 401) {
+            // Unauthorized (session expired), do not redirect in background, just stop
+            return;
+        }
+        if (!response.ok) return;
+        const data = await response.json();
+        state.bookings = data;
+        updateBookingsBadge();
+        
+        // If they are currently active on the bookings tab, also live-update the list!
+        if (state.activeTab === 'bookings') {
+            renderBookings();
+        }
+    } catch (e) {
+        console.error("Fel vid bakgrundsuppdatering av bokningsnotiser:", e);
+    }
+}
+
+// ==================== PWA PROGRESSIVE WEB APP SETUP ====================
+let deferredPrompt = null;
+
+function initPWA() {
+    // 1. Register Service Worker
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(reg => {
+                    console.log('[PWA] Service Worker registrerad med scope:', reg.scope);
+                })
+                .catch(err => {
+                    console.error('[PWA] Service Worker registrering misslyckades:', err);
+                });
+        });
+    }
+    
+    // 2. Listen for BeforeInstallPrompt event
+    window.addEventListener('beforeinstallprompt', (e) => {
+        // Prevent Chrome 67 and earlier from automatically showing the prompt
+        e.preventDefault();
+        // Stash the event so it can be triggered later.
+        deferredPrompt = e;
+        
+        console.log('[PWA] beforeinstallprompt triggad. Appen är redo att installeras!');
+        
+        // Only show install UI on mobile/tablet devices, not on desktop
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                      || (window.innerWidth <= 768 && 'ontouchstart' in window);
+        
+        if (!isMobile) {
+            console.log('[PWA] Desktop-enhet detekterad – installationsknapp döljs.');
+            return;
+        }
+        
+        // Show install button in Settings Modal (for staff)
+        const settingsInstallSection = document.getElementById('pwa-install-section');
+        if (settingsInstallSection) {
+            settingsInstallSection.classList.remove('hide');
+        }
+        
+        // Show install button in Public Header (for customers / visitor view)
+        const publicInstallBtn = document.getElementById('pwa-public-install-btn');
+        if (publicInstallBtn) {
+            publicInstallBtn.classList.remove('hide');
+        }
+    });
+    
+    // Helper function to execute installation
+    const triggerInstall = async () => {
+        if (!deferredPrompt) return;
+        
+        // Show the install prompt
+        deferredPrompt.prompt();
+        
+        // Wait for the user to respond to the prompt
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`[PWA] Användarens val för installation: ${outcome}`);
+        
+        // We've used the prompt, and can't use it again, discard it
+        deferredPrompt = null;
+        
+        // Hide our custom buttons/sections
+        hidePwaInstallUI();
+    };
+    
+    // Bind click events
+    const installBtn = document.getElementById('pwa-install-btn');
+    if (installBtn) {
+        installBtn.addEventListener('click', triggerInstall);
+    }
+    
+    const publicInstallBtn = document.getElementById('pwa-public-install-btn');
+    if (publicInstallBtn) {
+        publicInstallBtn.addEventListener('click', triggerInstall);
+    }
+    
+    // 3. Listen for AppInstalled event
+    window.addEventListener('appinstalled', (evt) => {
+        console.log('[PWA] LAGERPRO installerades framgångsrikt!');
+        hidePwaInstallUI();
+    });
+}
+
+function hidePwaInstallUI() {
+    const settingsInstallSection = document.getElementById('pwa-install-section');
+    if (settingsInstallSection) {
+        settingsInstallSection.classList.add('hide');
+    }
+    const publicInstallBtn = document.getElementById('pwa-public-install-btn');
+    if (publicInstallBtn) {
+        publicInstallBtn.classList.add('hide');
+    }
+}
+
 

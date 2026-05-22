@@ -1,11 +1,50 @@
-# LagerPRO - Gitignore
+# --- Python & Virtual Environments ---
 __pycache__/
 *.py[cod]
+*$py.class
 *.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+ENV/
+pip-log.txt
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Flask & Environment Variables ---
 .env
-*.bat
-database.db
-seed_*.py
-migrate_*.py
-test_*.py
+.flaskenv
+instance/
 *.log
+
+# --- Database Files (Crucial to ignore SQLite binaries) ---
+database.db
+*.sqlite
+*.db
+
+# --- OS temporary files ---
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+ehthumbs.db
+
+# --- Editor Configurations ---
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# --- Project Specific Rules ---
+seed_*.py
+test_*.py
+
+# Keep the SQLite migration script ignored, but ensure our new Postgres migration script IS committed!
+migrate_original_price.py
+!migrate_to_postgres.py
