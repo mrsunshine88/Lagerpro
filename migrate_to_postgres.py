@@ -7,6 +7,20 @@ from psycopg2.extras import DictCursor
 def migrate():
     # 1. Check for DATABASE_URL
     database_url = os.environ.get('DATABASE_URL')
+    if not database_url and os.path.exists('.env'):
+        try:
+            with open('.env', 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        k, v = line.split('=', 1)
+                        if k.strip() == 'DATABASE_URL':
+                            database_url = v.strip()
+                            print(f"[INFO] Laddade databaskoppling från .env-fil!")
+                            break
+        except Exception:
+            pass
+
     if not database_url:
         print("[FEL] Miljövariabeln 'DATABASE_URL' är inte inställd!")
         print("Vänligen ställ in den i ditt terminalfönster eller din miljö, t.ex:")
@@ -17,6 +31,12 @@ def migrate():
         if not database_url:
             print("[INFO] Migreringen avbröts.")
             sys.exit(1)
+        try:
+            with open('.env', 'w', encoding='utf-8') as f:
+                f.write(f"DATABASE_URL={database_url}\n")
+            print("[INFO] Sparade anslutningssträngen till .env för framtida bruk och automatisk start!")
+        except Exception:
+            pass
 
     sqlite_db_path = 'database.db'
     if not os.path.exists(sqlite_db_path):

@@ -102,6 +102,10 @@ export class BookingsService {
 
       booking.status = 'confirmed';
 
+      if (booking.paymentStatus === 'paid') {
+        return; // Already paid online and transaction is already created!
+      }
+
       let sellingPrice = booking.variant.sellingPrice;
       if (booking.discountPercent > 0) {
         sellingPrice = Math.round(booking.variant.sellingPrice * (1.0 - booking.discountPercent / 100.0));
@@ -149,6 +153,81 @@ export class BookingsService {
       }
 
       booking.status = 'reserved';
+    });
+  }
+
+  async createBatchBookings(data: {
+    items: { variantId: number }[];
+    firstName: string;
+    lastName: string;
+    phone: string;
+    discountCode?: string;
+    message?: string;
+    deliveryMethod: string;
+    shippingAddress?: string;
+    shippingCost: number;
+  }): Promise<Booking[]> {
+    const { items, firstName, lastName, phone, discountCode, message, deliveryMethod, shippingAddress, shippingCost } = data;
+    if (!items || items.length === 0 || !firstName || !lastName || !phone) {
+      throw new BadRequestException('Alla obligatoriska fält måste fyllas i.');
+    }
+
+    return this.em.transactional(async (em) => {
+      const createdBookings: Booking[] = [];
+
+      for (const item of items) {
+        const variant = await em.findOne(Variant, item.variantId, { populate: ['product'] });
+        if (!variant) {
+          throw new NotFoundException(`Storleken/skon med ID ${item.variantId} hittades inte.`);
+        }
+
+        if (variant.stock <= 0) {
+          throw new BadRequestException(`Den valda varianten ${variant.sku} är tyvärr slut i lager.`);
+        }
+
+        let discountPercent = 0.0;
+        let appliedCode: string | undefined = undefined;
+
+        if (discountCode && discountCode.trim()) {
+          const cleanCode = discountCode.trim().toUpperCase();
+          const dc = await em.findOne(DiscountCode, { code: cleanCode });
+          if (dc) {
+            const matchProject = dc.project.toLowerCase();
+            const category = variant.product.category.toLowerCase();
+            if (matchProject === 'alla' || matchProject === 'allmänt' || matchProject === 'all' || matchProject === category) {
+              discountPercent = dc.discountPercent;
+              appliedCode = dc.code;
+            } else {
+              throw new BadRequestException(`Rabattkoden ${cleanCode} gäller inte för denna kategori (${variant.product.category}).`);
+            }
+          } else {
+            throw new BadRequestException(`Rabattkoden ${cleanCode} är ogiltig.`);
+          }
+        }
+
+        const booking = new Booking();
+        booking.variant = variant;
+        booking.customerFirstName = firstName.trim();
+        booking.customerLastName = lastName.trim();
+        booking.customerPhone = phone.trim();
+        booking.status = 'pending';
+        booking.discountCode = appliedCode;
+        booking.discountPercent = discountPercent;
+        booking.message = message ? message.trim() : undefined;
+        booking.paymentStatus = 'pending';
+        booking.deliveryMethod = deliveryMethod || 'pickup';
+        booking.shippingAddress = shippingAddress ? shippingAddress.trim() : undefined;
+        booking.shippingCost = shippingCost || 0.0;
+
+        em.persist(booking);
+        
+        // Decrement stock by 1
+        variant.stock -= 1;
+        createdBookings.push(booking);
+      }
+
+      await em.flush();
+      return createdBookings;
     });
   }
 }

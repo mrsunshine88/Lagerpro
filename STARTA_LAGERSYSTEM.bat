@@ -21,6 +21,33 @@ goto end
 
 :fullstack
 echo.
+if not exist .env (
+    echo ===================================================
+    echo       KONFIGURATION: POSTGRESQL DATABAS
+    echo ===================================================
+    echo.
+    echo Hittade ingen sparad databaskoppling (.env-fil).
+    echo För att köra fullstack-versionen med PostgreSQL behöver vi din anslutningssträng.
+    echo Du kan använda en lokal Postgres eller en molndatabas (t.ex. Supabase eller Neon.tech).
+    echo.
+    set /p db_url="Klistra in din PostgreSQL-anslutningssträng (DATABASE_URL): "
+    if not "%db_url%"=="" (
+        echo DATABASE_URL=%db_url%>.env
+        echo [OK] Databaskopplingen har sparats i filen .env!
+        echo.
+    ) else (
+        echo [VARNING] Ingen anslutningssträng angavs. Försöker med standard lokal Postgres...
+        echo.
+    )
+)
+
+:: Läs .env-filen ifall den finns
+if exist .env (
+    for /f "usebackq tokens=*" %%i in (`type .env ^| findstr /v "^#"`) do (
+        set %%i
+    )
+)
+
 echo [SYSTEM] Startar NestJS Backend (Port 3000)...
 start "Lagerpro - Backend" cmd.exe /c "cd backend && npm run start:dev"
 echo [SYSTEM] Startar Vite Frontend (Port 5173)...

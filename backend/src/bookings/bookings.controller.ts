@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Req, UseGuards, ParseIntPipe, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Req, UseGuards, ParseIntPipe, HttpCode, HttpStatus, Query } from '@nestjs/common';
 import { BookingsService } from './bookings.service.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 
@@ -30,6 +30,51 @@ export class BookingsController {
     return { success: true };
   }
 
+  @Post('public/bookings/batch')
+  @HttpCode(HttpStatus.OK)
+  async createPublicBatchBookings(
+    @Body()
+    body: {
+      items: { variant_id: number }[];
+      first_name: string;
+      last_name: string;
+      phone: string;
+      discount_code?: string;
+      message?: string;
+      delivery_method: string;
+      shipping_address?: string;
+      shipping_cost: number;
+    },
+  ) {
+    const bookings = await this.bookingsService.createBatchBookings({
+      items: body.items.map(item => ({ variantId: item.variant_id })),
+      firstName: body.first_name,
+      lastName: body.last_name,
+      phone: body.phone,
+      discountCode: body.discount_code,
+      message: body.message,
+      deliveryMethod: body.delivery_method,
+      shippingAddress: body.shipping_address,
+      shippingCost: body.shipping_cost,
+    });
+    return {
+      success: true,
+      booking_ids: bookings.map(b => b.id),
+    };
+  }
+
+  @Get('public/bookings/payment-status')
+  async checkPaymentStatus(@Query('ids') ids: string) {
+    if (!ids) {
+      return { paid: false };
+    }
+    const idArray = ids.split(',').map(id => parseInt(id)).filter(Boolean);
+    const bookings = await this.bookingsService.findAllBookings();
+    const match = bookings.filter(b => idArray.includes(b.id));
+    const allPaid = match.length > 0 && match.every(b => b.paymentStatus === 'paid');
+    return { paid: allPaid };
+  }
+
   @UseGuards(JwtAuthGuard)
   @Get('bookings')
   async getBookings() {
@@ -49,6 +94,10 @@ export class BookingsController {
       discount_code: b.discountCode,
       discount_percent: b.discountPercent,
       message: b.message,
+      payment_status: b.paymentStatus,
+      delivery_method: b.deliveryMethod,
+      shipping_address: b.shippingAddress,
+      shipping_cost: b.shippingCost,
       purchase_price: b.variant.purchasePrice,
       product_name: b.variant.product.name,
       product_category: b.variant.product.category,

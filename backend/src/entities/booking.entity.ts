@@ -30,6 +30,18 @@ export class Booking {
   @Property({ type: 'text', nullable: true })
   message?: string;
 
+  @Property({ default: 'pending' })
+  paymentStatus = 'pending'; // 'pending', 'paid'
+
+  @Property({ default: 'pickup' })
+  deliveryMethod = 'pickup'; // 'pickup', 'shipping'
+
+  @Property({ type: 'text', nullable: true })
+  shippingAddress?: string;
+
+  @Property({ type: 'float', default: 0.0 })
+  shippingCost = 0.0;
+
   @Property({ defaultRaw: 'CURRENT_TIMESTAMP' })
   createdAt = new Date();
 }

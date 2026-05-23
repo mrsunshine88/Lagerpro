@@ -72,6 +72,103 @@ export class SettingsService {
     await this.em.flush();
   }
 
+  async getProjectConfig(project: string): Promise<{ checkout_mode: string; delivery_method: string; shipping_cost: number }> {
+    const modeKey = `checkout_mode_${project}`;
+    const devKey = `delivery_method_${project}`;
+    const shipKey = `shipping_cost_${project}`;
+
+    const modeSetting = await this.settingRepository.findOne({ key: modeKey });
+    const devSetting = await this.settingRepository.findOne({ key: devKey });
+    const shipSetting = await this.settingRepository.findOne({ key: shipKey });
+
+    return {
+      checkout_mode: modeSetting?.value || 'booking',
+      delivery_method: devSetting?.value || 'pickup',
+      shipping_cost: shipSetting?.value ? parseFloat(shipSetting.value) : 0.0,
+    };
+  }
+
+  async setProjectConfig(
+    project: string,
+    config: { checkout_mode: string; delivery_method: string; shipping_cost: number },
+  ): Promise<void> {
+    await this.em.transactional(async (em) => {
+      const modeKey = `checkout_mode_${project}`;
+      const devKey = `delivery_method_${project}`;
+      const shipKey = `shipping_cost_${project}`;
+
+      // Save checkout mode
+      let modeSetting = await em.findOne(Setting, { key: modeKey });
+      if (!modeSetting) {
+        modeSetting = new Setting();
+        modeSetting.key = modeKey;
+        em.persist(modeSetting);
+      }
+      modeSetting.value = config.checkout_mode;
+
+      // Save delivery method
+      let devSetting = await em.findOne(Setting, { key: devKey });
+      if (!devSetting) {
+        devSetting = new Setting();
+        devSetting.key = devKey;
+        em.persist(devSetting);
+      }
+      devSetting.value = config.delivery_method;
+
+      // Save shipping cost
+      let shipSetting = await em.findOne(Setting, { key: shipKey });
+      if (!shipSetting) {
+        shipSetting = new Setting();
+        shipSetting.key = shipKey;
+        em.persist(shipSetting);
+      }
+      shipSetting.value = config.shipping_cost.toString();
+    });
+  }
+
+  async getSwishConfig(): Promise<{ merchant_id: string; has_cert: boolean; has_key: boolean }> {
+    const merchantId = await this.settingRepository.findOne({ key: 'swish_merchant_id' });
+    const cert = await this.settingRepository.findOne({ key: 'swish_tls_certificate' });
+    const key = await this.settingRepository.findOne({ key: 'swish_tls_key' });
+
+    return {
+      merchant_id: merchantId?.value || '',
+      has_cert: !!cert?.value?.trim(),
+      has_key: !!key?.value?.trim(),
+    };
+  }
+
+  async setSwishConfig(config: { merchant_id: string; cert: string; key: string }): Promise<void> {
+    await this.em.transactional(async (em) => {
+      // Save merchant ID
+      let merchantSetting = await em.findOne(Setting, { key: 'swish_merchant_id' });
+      if (!merchantSetting) {
+        merchantSetting = new Setting();
+        merchantSetting.key = 'swish_merchant_id';
+        em.persist(merchantSetting);
+      }
+      merchantSetting.value = config.merchant_id.trim();
+
+      // Save TLS Certificate
+      let certSetting = await em.findOne(Setting, { key: 'swish_tls_certificate' });
+      if (!certSetting) {
+        certSetting = new Setting();
+        certSetting.key = 'swish_tls_certificate';
+        em.persist(certSetting);
+      }
+      certSetting.value = config.cert.trim();
+
+      // Save TLS Key
+      let keySetting = await em.findOne(Setting, { key: 'swish_tls_key' });
+      if (!keySetting) {
+        keySetting = new Setting();
+        keySetting.key = 'swish_tls_key';
+        em.persist(keySetting);
+      }
+      keySetting.value = config.key.trim();
+    });
+  }
+
   async setPassword(password: string): Promise<void> {
     if (password.length < 4) {
       throw new BadRequestException('Lösenordet måste vara minst 4 tecken långt.');

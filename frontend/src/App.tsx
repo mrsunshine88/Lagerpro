@@ -80,6 +80,10 @@ interface Booking {
   discount_percent?: number;
   original_selling_price?: number;
   message?: string;
+  paymentStatus?: string;
+  deliveryMethod?: string;
+  shippingAddress?: string;
+  shippingCost?: number;
 }
 
 interface CartItem {
@@ -195,6 +199,7 @@ export default function App() {
   // Public Booking Modal
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [selectedBookingVariant, setSelectedBookingVariant] = useState<any | null>(null);
+  if (false) { setSelectedBookingVariant(null); }
   const [bookingFirstName, setBookingFirstName] = useState('');
   const [bookingLastName, setBookingLastName] = useState('');
   const [bookingPhone, setBookingPhone] = useState('');
@@ -223,6 +228,44 @@ export default function App() {
   const [newDiscountProject, setNewDiscountProject] = useState('Allmänt');
   const [newDiscountPercent, setNewDiscountPercent] = useState(0);
   const [editingDiscountId, setEditingDiscountId] = useState<number | null>(null);
+
+  // Swish Global settings
+  const [swishMerchantId, setSwishMerchantId] = useState('');
+  const [swishCert, setSwishCert] = useState('');
+  const [swishKey, setSwishKey] = useState('');
+  const [swishHasCert, setSwishHasCert] = useState(false);
+  const [swishHasKey, setSwishHasKey] = useState(false);
+
+  // Project e-commerce configs in settings modal
+  const [settingCheckoutMode, setSettingCheckoutMode] = useState('booking');
+  const [settingDeliveryMethod, setSettingDeliveryMethod] = useState('pickup');
+  const [settingShippingCost, setSettingShippingCost] = useState(0);
+
+  // Public Shopping Cart states
+  const [publicCart, setPublicCart] = useState<any[]>([]);
+  const [cartModalOpen, setCartModalOpen] = useState(false);
+  const [cartDiscountCode, setCartDiscountCode] = useState('');
+  const [cartDiscountPercent, setCartDiscountPercent] = useState(0);
+  const [cartDiscountValid, setCartDiscountValid] = useState(false);
+  const [cartDiscountError, setCartDiscountError] = useState('');
+  const [purchasedItems, setPurchasedItems] = useState<any[]>([]);
+  
+  // Checkout & Payment states
+  const [checkoutFirstName, setCheckoutFirstName] = useState('');
+  const [checkoutLastName, setCheckoutLastName] = useState('');
+  const [checkoutPhone, setCheckoutPhone] = useState('');
+  const [checkoutDeliveryMethod, setCheckoutDeliveryMethod] = useState('pickup');
+  const [checkoutShippingAddress, setCheckoutShippingAddress] = useState('');
+  const [checkoutMessage, setCheckoutMessage] = useState('');
+  
+  // Payment status
+  const [paymentStep, setPaymentStep] = useState<'idle' | 'swish_waiting' | 'swish_success' | 'swish_failed' | 'booking_success'>('idle');
+  const [activePaymentId, setActivePaymentId] = useState('');
+  const [activePaymentIsMock, setActivePaymentIsMock] = useState(false);
+  const [createdBookingIds, setCreatedBookingIds] = useState<number[]>([]);
+
+  // Map of project configurations loaded publicly for catalog
+  const [projectConfigs, setProjectConfigs] = useState<Record<string, { checkout_mode: string; delivery_method: string; shipping_cost: number }>>({});
 
   // Admin User Panel
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
@@ -303,10 +346,26 @@ export default function App() {
   }, [bookingModalOpen]);
 
   // --- API CALLS ---
+  const fetchPublicConfigsForProducts = async (prods: any[]) => {
+    const categories = Array.from(new Set(prods.map((p: any) => p.category).filter(Boolean)));
+    const configs: Record<string, any> = { ...projectConfigs };
+    for (const cat of categories) {
+      if (configs[cat as string]) continue; // Skip if already fetched
+      try {
+        const res = await axios.get(`${API_BASE_URL}/api/public/projects/config?project=${encodeURIComponent(cat as string)}`);
+        configs[cat as string] = res.data;
+      } catch (e) {
+        configs[cat as string] = { checkout_mode: 'booking', delivery_method: 'pickup', shipping_cost: 0 };
+      }
+    }
+    setProjectConfigs(configs);
+  };
+
   const fetchProducts = async () => {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/products`, getAxiosConfig());
       setProducts(res.data);
+      fetchPublicConfigsForProducts(res.data);
     } catch (e) {
       console.error(e);
     }
@@ -316,9 +375,40 @@ export default function App() {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/public/products`);
       setPublicProducts(res.data);
+      fetchPublicConfigsForProducts(res.data);
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const addToPublicCart = (prodName: string, prodCat: string, variant: any) => {
+    const exists = publicCart.find(item => item.variant.id === variant.id);
+    if (exists) {
+      alert('Denna storlek finns redan i din varukorg!');
+      return;
+    }
+
+    const newConfig = projectConfigs[prodCat] || { checkout_mode: 'booking' };
+    
+    if (publicCart.length > 0) {
+      const existingCat = publicCart[0].product_category;
+      const existingConfig = projectConfigs[existingCat] || { checkout_mode: 'booking' };
+      if (newConfig.checkout_mode !== existingConfig.checkout_mode) {
+        alert(
+          `Du kan inte blanda direktköp (näthandel) och butiksbokningar i samma varukorg. Vänligen slutför din befintliga bokning/order först!`
+        );
+        return;
+      }
+    }
+
+    setPublicCart([...publicCart, {
+      variant,
+      product_name: prodName,
+      product_category: prodCat,
+      quantity: 1
+    }]);
+    
+    alert(`Lade till "${prodName} - Storlek ${variant.size}" i varukorgen!`);
   };
 
   const fetchBookings = async () => {
@@ -630,6 +720,139 @@ export default function App() {
     }
   };
 
+  // Cart Discount Realtime check
+  const checkCartDiscountCode = async (code: string) => {
+    setCartDiscountCode(code);
+    if (!code.trim()) {
+      setCartDiscountValid(false);
+      setCartDiscountPercent(0);
+      setCartDiscountError('');
+      return;
+    }
+    if (publicCart.length === 0) return;
+    const category = publicCart[0].product_category;
+    try {
+      const res = await axios.get(
+        `${API_BASE_URL}/api/public/discount-codes/validate?code=${encodeURIComponent(code)}&category=${encodeURIComponent(category)}`
+      );
+      if (res.data.valid) {
+        setCartDiscountValid(true);
+        setCartDiscountPercent(res.data.discountPercent);
+        setCartDiscountError('');
+      } else {
+        setCartDiscountValid(false);
+        setCartDiscountPercent(0);
+        setCartDiscountError(res.data.project ? `Gäller endast kategori "${res.data.project}"` : 'Ogiltig rabattkod');
+      }
+    } catch (e) {
+      setCartDiscountValid(false);
+      setCartDiscountPercent(0);
+      setCartDiscountError('Kunde inte verifiera koden.');
+    }
+  };
+
+  // Cart Batch Checkout / Swish Payment
+  const handleCheckoutCart = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (publicCart.length === 0) return;
+
+    // Retrieve the configuration of the first item (all items share same mode since mixing is prevented!)
+    const cat = publicCart[0].product_category;
+    const config = projectConfigs[cat] || { checkout_mode: 'booking', delivery_method: 'pickup', shipping_cost: 0 };
+    
+    const isEcom = config.checkout_mode === 'ecommerce';
+    const isShipping = isEcom && checkoutDeliveryMethod === 'shipping';
+    const shippingCost = isShipping ? (config.shipping_cost || 0) : 0;
+
+    try {
+      // 1. Create bookings in a batch
+      const res = await axios.post(`${API_BASE_URL}/api/public/bookings/batch`, {
+        items: publicCart.map(item => ({ variant_id: item.variant.id })),
+        first_name: checkoutFirstName.trim(),
+        last_name: checkoutLastName.trim(),
+        phone: checkoutPhone.trim(),
+        discount_code: cartDiscountValid ? cartDiscountCode.trim() : undefined,
+        message: checkoutMessage.trim() || undefined,
+        delivery_method: isShipping ? 'shipping' : 'pickup',
+        shipping_address: isShipping ? checkoutShippingAddress.trim() : undefined,
+        shipping_cost: shippingCost
+      });
+
+      if (res.data.success && res.data.booking_ids) {
+        const bIds = res.data.booking_ids;
+        setCreatedBookingIds(bIds);
+        setPurchasedItems(publicCart);
+
+        // 2. If it's a pure booking, complete immediately!
+        if (!isEcom) {
+          setPublicCart([]);
+          fetchPublicProducts();
+          setPaymentStep('booking_success');
+        } else {
+          // 3. E-commerce: Initiate Swish Payment
+          setPaymentStep('swish_waiting');
+          try {
+            const payRes = await axios.post(`${API_BASE_URL}/api/public/payments/swish/initiate`, {
+              booking_ids: bIds,
+              phone_number: checkoutPhone.trim()
+            });
+
+            if (payRes.data.success) {
+              setActivePaymentId(payRes.data.paymentId);
+              setActivePaymentIsMock(payRes.data.isMock);
+            }
+          } catch (payErr) {
+            setPaymentStep('swish_failed');
+            alert('Kunde inte starta Swish-betalningen. Kontrollera dina uppgifter.');
+          }
+        }
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Kunde inte spara dina bokningar. Kontrollera lagersaldot.');
+    }
+  };
+
+  const simulateSwishCompletion = async () => {
+    if (!activePaymentId) return;
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/public/payments/swish/simulate-mock`, {
+        payment_id: activePaymentId
+      });
+      if (res.data.success) {
+        setPaymentStep('swish_success');
+        setPublicCart([]);
+        fetchPublicProducts();
+      }
+    } catch (e) {
+      alert('Kunde inte simulera Swish-betalning.');
+    }
+  };
+
+  // Swish Polling effect
+  useEffect(() => {
+    if (paymentStep !== 'swish_waiting' || createdBookingIds.length === 0) return;
+    
+    let timer: any;
+    const checkStatus = async () => {
+      try {
+        const res = await axios.get(
+          `${API_BASE_URL}/api/public/bookings/payment-status?ids=${createdBookingIds.join(',')}`
+        );
+        if (res.data.paid) {
+          setPaymentStep('swish_success');
+          setPublicCart([]);
+          fetchPublicProducts();
+          clearInterval(timer);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    timer = setInterval(checkStatus, 2000);
+    return () => clearInterval(timer);
+  }, [paymentStep, createdBookingIds]);
+
   // Public Booking Submit
   const handlePublicBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -711,10 +934,52 @@ export default function App() {
         getAxiosConfig()
       );
 
+      await axios.post(
+        `${API_BASE_URL}/api/projects/config`,
+        {
+          project: selectedSettingProject,
+          checkout_mode: settingCheckoutMode,
+          delivery_method: settingDeliveryMethod,
+          shipping_cost: settingShippingCost
+        },
+        getAxiosConfig()
+      );
+
+      // Force refresh of public configurations map
+      const configs = { ...projectConfigs };
+      configs[selectedSettingProject] = {
+        checkout_mode: settingCheckoutMode,
+        delivery_method: settingDeliveryMethod,
+        shipping_cost: settingShippingCost
+      };
+      setProjectConfigs(configs);
+
       fetchAnalytics();
       alert('Inställningar sparade!');
     } catch (e) {
       alert('Kunde inte spara inställningar.');
+    }
+  };
+
+  const handleSaveSwishSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await axios.post(
+        `${API_BASE_URL}/api/settings/swish`,
+        {
+          merchant_id: swishMerchantId.trim(),
+          cert: swishCert.trim(),
+          key: swishKey.trim()
+        },
+        getAxiosConfig()
+      );
+      setSwishCert('');
+      setSwishKey('');
+      setSwishHasCert(true);
+      setSwishHasKey(true);
+      alert('Swish API nycklar och certifikat har sparats och aktiverats!');
+    } catch (e) {
+      alert('Kunde inte spara Swish-uppgifter.');
     }
   };
 
@@ -935,8 +1200,28 @@ export default function App() {
         .get(`${API_BASE_URL}/api/projects/discount?project=${selectedSettingProject}`, getAxiosConfig())
         .then((res) => setSettingDiscount(res.data.discount_percent || 0))
         .catch(() => {});
+
+      axios
+        .get(`${API_BASE_URL}/api/public/projects/config?project=${selectedSettingProject}`)
+        .then((res) => {
+          setSettingCheckoutMode(res.data.checkout_mode || 'booking');
+          setSettingDeliveryMethod(res.data.delivery_method || 'pickup');
+          setSettingShippingCost(res.data.shipping_cost || 0);
+        })
+        .catch(() => {});
+
+      if (userProfile?.role === 'admin') {
+        axios
+          .get(`${API_BASE_URL}/api/settings/swish`, getAxiosConfig())
+          .then((res) => {
+            setSwishMerchantId(res.data.merchant_id || '');
+            setSwishHasCert(res.data.has_cert);
+            setSwishHasKey(res.data.has_key);
+          })
+          .catch(() => {});
+      }
     }
-  }, [selectedSettingProject, settingsModalOpen]);
+  }, [selectedSettingProject, settingsModalOpen, userProfile]);
 
   // Main UI render
   return (
@@ -953,6 +1238,12 @@ export default function App() {
               <span className="badge" style={{ background: 'rgba(217, 70, 239, 0.15)', color: 'var(--color-accent)', border: '1px solid rgba(217, 70, 239, 0.3)', fontWeight: 700, marginLeft: 10, fontSize: '0.75rem', letterSpacing: 0.5 }}>KUNDPORTAL</span>
             </div>
             <div className="header-right" style={{ display: 'flex', gap: 8 }}>
+              {publicCart.length > 0 && (
+                <button onClick={() => setCartModalOpen(true)} className="btn btn-primary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6, background: 'var(--color-accent)', borderColor: 'var(--color-accent)' }}>
+                  <ShoppingCart style={{ width: 14, height: 14 }} />
+                  <span>Visa varukorg ({publicCart.length} par)</span>
+                </button>
+              )}
               <button onClick={() => setLoginModalOpen(true)} className="btn btn-ghost" style={{ border: '1px solid var(--border-light)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <LogIn style={{ width: 14, height: 14 }} />
                 <span>Personalinloggning</span>
@@ -1027,7 +1318,9 @@ export default function App() {
                                 <span style={{ textDecoration: 'line-through', fontSize: '0.8rem', color: 'var(--color-danger)' }}>{v.original_price} kr</span>
                               )}
                               <span style={{ fontWeight: 800, color: 'var(--color-success)' }}>{v.selling_price} kr</span>
-                              <button onClick={() => { setSelectedBookingVariant({ ...v, product_name: p.name, product_category: p.category }); setBookingModalOpen(true); }} className="btn btn-primary btn-xs">Boka</button>
+                               <button onClick={() => addToPublicCart(p.name, p.category, v)} className="btn btn-primary btn-xs">
+                                {projectConfigs[p.category]?.checkout_mode === 'ecommerce' ? 'Köp' : 'Boka'}
+                               </button>
                             </div>
                           </div>
                         ))}
@@ -1499,7 +1792,23 @@ export default function App() {
                         {bookings.map((b) => (
                           <tr key={b.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
                             <td style={{ padding: '12px 15px' }}><strong>#{b.id}</strong></td>
-                            <td style={{ padding: '12px 15px' }}>{b.customer_first_name} {b.customer_last_name}</td>
+                            <td style={{ padding: '12px 15px' }}>
+                              <div>
+                                {b.customer_first_name} {b.customer_last_name}
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                                  {b.paymentStatus === 'paid' ? (
+                                    <span className="badge" style={{ display: 'inline-block', padding: '2px 6px', fontSize: '0.7rem', fontWeight: 600, background: 'rgba(16, 185, 129, 0.15)', color: 'var(--color-success)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>✓ BETALD (Swish)</span>
+                                  ) : (
+                                    <span className="badge" style={{ display: 'inline-block', padding: '2px 6px', fontSize: '0.7rem', fontWeight: 600, background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-secondary)' }}>BUTIKSBETALNING</span>
+                                  )}
+                                  {b.deliveryMethod === 'shipping' ? (
+                                    <span className="badge" style={{ display: 'inline-block', padding: '2px 6px', fontSize: '0.7rem', fontWeight: 600, background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)' }}>FRAKTAS (PostNord)</span>
+                                  ) : (
+                                    <span className="badge" style={{ display: 'inline-block', padding: '2px 6px', fontSize: '0.7rem', fontWeight: 600, background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-secondary)' }}>HÄMTAS I BUTIK</span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
                             <td style={{ padding: '12px 15px' }}><a href={`tel:${b.customer_phone}`} style={{ color: 'var(--color-primary)' }}>{b.customer_phone}</a></td>
                             <td style={{ padding: '12px 15px' }}>
                               <strong>{b.product_name}</strong>
@@ -1507,6 +1816,13 @@ export default function App() {
                               {b.message && (
                                 <div style={{ marginTop: 6, padding: '4px 8px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.15)', borderRadius: 4, fontSize: '0.8rem', color: '#fbbf24', maxWidth: 280, whiteSpace: 'normal', wordBreak: 'break-word' }}>
                                   <strong>Meddelande:</strong> "{b.message}"
+                                </div>
+                              )}
+                              {b.deliveryMethod === 'shipping' && b.shippingAddress && (
+                                <div style={{ marginTop: 6, padding: '6px 10px', background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.15)', borderRadius: 4, fontSize: '0.8rem', color: '#93c5fd', maxWidth: 280, whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                                  <strong>Mottagaradress:</strong>
+                                  <span style={{ display: 'block', marginTop: 2 }}>{b.shippingAddress}</span>
+                                  {b.shippingCost !== undefined && b.shippingCost > 0 && <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2 }}>Fraktavgift: {b.shippingCost} kr</span>}
                                 </div>
                               )}
                             </td>
@@ -1524,7 +1840,7 @@ export default function App() {
                               <span className={`status-badge status-${b.status}`}>
                                 {b.status === 'pending' && 'Väntar'}
                                 {b.status === 'reserved' && 'Undanlagd'}
-                                {b.status === 'confirmed' && 'Hämtad'}
+                                {b.status === 'confirmed' && (b.paymentStatus === 'paid' ? 'Överlämnad' : 'Hämtad')}
                                 {b.status === 'cancelled' && 'Avbruten'}
                               </span>
                             </td>
@@ -1532,17 +1848,17 @@ export default function App() {
                               {b.status === 'pending' && (
                                 <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                                   <button onClick={() => handleReserveBooking(b.id)} className="btn btn-secondary btn-xs" style={{ borderColor: 'var(--color-accent)', color: 'var(--color-accent)' }}>Reservera</button>
-                                  <button onClick={() => handleConfirmBooking(b.id)} className="btn btn-success btn-xs">Bekräfta hämtning</button>
+                                  <button onClick={() => handleConfirmBooking(b.id)} className="btn btn-success btn-xs">{b.paymentStatus === 'paid' ? 'Bekräfta överlämning' : 'Bekräfta hämtning'}</button>
                                   <button onClick={() => handleCancelBooking(b.id)} className="btn btn-ghost btn-xs" style={{ color: 'var(--color-danger)' }}>Avbryt</button>
                                 </div>
                               )}
                               {b.status === 'reserved' && (
                                 <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                                  <button onClick={() => handleConfirmBooking(b.id)} className="btn btn-success btn-xs">Bekräfta hämtning</button>
+                                  <button onClick={() => handleConfirmBooking(b.id)} className="btn btn-success btn-xs">{b.paymentStatus === 'paid' ? 'Bekräfta överlämning' : 'Bekräfta hämtning'}</button>
                                   <button onClick={() => handleCancelBooking(b.id)} className="btn btn-ghost btn-xs" style={{ color: 'var(--color-danger)' }}>Avbryt</button>
                                 </div>
                               )}
-                              {b.status === 'confirmed' && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Hämtad</span>}
+                              {b.status === 'confirmed' && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{b.paymentStatus === 'paid' ? 'Överlämnad' : 'Hämtad'}</span>}
                               {b.status === 'cancelled' && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Raderad/Återställd</span>}
                             </td>
                           </tr>
@@ -2177,6 +2493,46 @@ export default function App() {
                         </div>
                       </div>
 
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 15 }}>
+                        <div className="input-container">
+                          <label>Betalsätt</label>
+                          <select
+                            value={settingCheckoutMode}
+                            onChange={(e) => setSettingCheckoutMode(e.target.value)}
+                            className="custom-select"
+                            style={{ width: '100%', height: 42 }}
+                          >
+                            <option value="booking">Gratis Butiksbokning</option>
+                            <option value="ecommerce">Direktbetalning online via Swish</option>
+                          </select>
+                        </div>
+                        <div className="input-container">
+                          <label>Leveranssätt</label>
+                          <select
+                            value={settingDeliveryMethod}
+                            onChange={(e) => setSettingDeliveryMethod(e.target.value)}
+                            className="custom-select"
+                            style={{ width: '100%', height: 42 }}
+                          >
+                            <option value="pickup">Endast upphämtning i butik</option>
+                            <option value="shipping_pickup">Aktivera PostNord hemleverans</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {settingDeliveryMethod === 'shipping_pickup' && (
+                        <div className="input-container" style={{ marginBottom: 15 }}>
+                          <label>Fraktavgift vid hemleverans (kr)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={settingShippingCost}
+                            onChange={(e) => setSettingShippingCost(parseFloat(e.target.value) || 0)}
+                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                        </div>
+                      )}
+
                       <button type="submit" className="btn btn-primary btn-sm">Spara partiinställningar</button>
                     </form>
                   </div>
@@ -2196,6 +2552,51 @@ export default function App() {
                         </div>
                       ))}
                     </div>
+                  </div>
+
+                  <div style={{ borderBottom: '1px solid var(--border-light)', paddingBottom: 20, marginBottom: 20 }}>
+                    <h3>Swish API-nycklar (Näthandel)</h3>
+                    <form onSubmit={handleSaveSwishSettings}>
+                      <div className="input-container" style={{ marginBottom: 12 }}>
+                        <label>Swish-nummer (Merchant ID) *</label>
+                        <input
+                          type="text"
+                          placeholder="T.ex. 1231112233"
+                          value={swishMerchantId}
+                          onChange={(e) => setSwishMerchantId(e.target.value)}
+                          required
+                          style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                        />
+                      </div>
+
+                      <div className="input-container" style={{ marginBottom: 12 }}>
+                        <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>SSL Client Certificate (PEM-format)</span>
+                          {swishHasCert && <span style={{ color: 'var(--color-success)', fontSize: '0.8rem', fontWeight: 600 }}>✓ Certifikat sparat</span>}
+                        </label>
+                        <textarea
+                          placeholder="Klistra in hela certifikattexten (inklusive -----BEGIN CERTIFICATE-----) här..."
+                          value={swishCert}
+                          onChange={(e) => setSwishCert(e.target.value)}
+                          style={{ width: '100%', height: 100, padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.8rem' }}
+                        />
+                      </div>
+
+                      <div className="input-container" style={{ marginBottom: 15 }}>
+                        <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>SSL Client Private Key (KEY-format)</span>
+                          {swishHasKey && <span style={{ color: 'var(--color-success)', fontSize: '0.8rem', fontWeight: 600 }}>✓ Privat nyckel sparad</span>}
+                        </label>
+                        <textarea
+                          placeholder="Klistra in hela nyckeltexten (inklusive -----BEGIN PRIVATE KEY-----) här..."
+                          value={swishKey}
+                          onChange={(e) => setSwishKey(e.target.value)}
+                          style={{ width: '100%', height: 100, padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.8rem' }}
+                        />
+                      </div>
+
+                      <button type="submit" className="btn btn-primary btn-sm">Spara Swish-uppgifter</button>
+                    </form>
                   </div>
 
                   <div>
@@ -2434,6 +2835,475 @@ export default function App() {
                   </table>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== PUBLIC SHOPPING CART / CHECKOUT MODAL ==================== */}
+      {cartModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-card glass-modal modal-md" style={{ maxWidth: 520 }}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2>Varukorg &amp; Kassa</h2>
+              <button className="btn-close" onClick={() => setCartModalOpen(false)}><X /></button>
+            </div>
+            
+            <div className="modal-body" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+              {paymentStep === 'swish_waiting' && (
+                <div style={{ textAlign: 'center', padding: '30px 10px' }}>
+                  <div className="spinner" style={{ border: '4px solid rgba(16,185,129,0.1)', borderLeftColor: 'var(--color-success)', borderRadius: '50%', width: 50, height: 50, animation: 'spin 1s linear infinite', margin: '0 auto 20px auto' }}></div>
+                  <style>{`
+                    @keyframes spin {
+                      0% { transform: rotate(0deg); }
+                      100% { transform: rotate(360deg); }
+                    }
+                  `}</style>
+                  <h3 style={{ marginBottom: 10, color: 'var(--color-success)' }}>Väntar på Swish...</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.5, marginBottom: 20 }}>
+                    Öppna din Swish-app i mobilen för att slutföra betalningen. Betalningen registreras automatiskt här så fort den är godkänd.
+                  </p>
+                  
+                  {activePaymentIsMock && (
+                    <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px dashed var(--border-light)', padding: 15, borderRadius: 6, marginBottom: 20 }}>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: 12 }}>
+                        Eftersom du kör i test/simuleringsläge kan du godkänna köpet manuellt nedan:
+                      </p>
+                      <button type="button" onClick={simulateSwishCompletion} className="btn btn-success btn-sm btn-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                        <Check style={{ width: 14, height: 14 }} />
+                        <span>Simulera Swish-godkännande</span>
+                      </button>
+                    </div>
+                  )}
+                  
+                  <button type="button" onClick={() => setPaymentStep('idle')} className="btn btn-ghost btn-sm btn-full" style={{ color: 'var(--color-danger)' }}>
+                    Avbryt betalning och gå tillbaka
+                  </button>
+                </div>
+              )}
+
+              {(paymentStep === 'swish_success' || paymentStep === 'booking_success') && (
+                <div id="receipt-print-area" style={{ padding: '10px 5px' }}>
+                  {/* Print-specific style to ensure it looks beautiful and fits on a mobile/paper screen */}
+                  <style>{`
+                    @media print {
+                      body * {
+                        visibility: hidden !important;
+                      }
+                      #receipt-print-area, #receipt-print-area * {
+                        visibility: visible !important;
+                      }
+                      #receipt-print-area {
+                        position: absolute !important;
+                        left: 0 !important;
+                        top: 0 !important;
+                        width: 100% !important;
+                        color: #000 !important;
+                        background: #fff !important;
+                        padding: 20px !important;
+                      }
+                      .no-print {
+                        display: none !important;
+                      }
+                      .glass-panel {
+                        border: 1px solid #ccc !important;
+                        background: none !important;
+                        color: #000 !important;
+                      }
+                      .modal-card {
+                        background: #fff !important;
+                        border: none !important;
+                        box-shadow: none !important;
+                      }
+                    }
+                  `}</style>
+
+                  <div className="no-print" style={{ textAlign: 'center', marginBottom: 20 }}>
+                    <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(16,185,129,0.1)', border: '2px solid var(--color-success)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 15px auto' }}>
+                      <Check style={{ color: 'var(--color-success)', width: 32, height: 32 }} />
+                    </div>
+                    <h3 style={{ marginBottom: 6, fontSize: '1.4rem' }}>
+                      {paymentStep === 'swish_success' ? 'Betalning godkänd!' : 'Bokning klar!'}
+                    </h3>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.4, maxWidth: 360, margin: '0 auto' }}>
+                      {paymentStep === 'swish_success' 
+                        ? 'Tack för ditt köp! Din Swish-betalning har verifierats och dina varor har reserverats.'
+                        : 'Vi har lagt undan dina produkter i butiken. Välkommen att hämta!'
+                      }
+                    </p>
+                  </div>
+
+                  {/* Digital Kvitto Card */}
+                  <div className="glass-panel" style={{ padding: 20, borderRadius: 8, background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', marginBottom: 20 }}>
+                    <div style={{ textAlign: 'center', borderBottom: '1px dashed var(--border-light)', paddingBottom: 15, marginBottom: 15 }}>
+                      <h4 style={{ margin: '0 0 4px 0', fontSize: '1.2rem', color: 'var(--color-primary)' }}>ORDERBEKRÄFTELSE</h4>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                        Datum: {new Date().toLocaleString('sv-SE')}
+                      </span>
+                      <div style={{ marginTop: 8, fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-success)' }}>
+                        Ordernummer: {createdBookingIds.map(id => `#${id}`).join(', ')}
+                      </div>
+                    </div>
+
+                    {/* Customer Info */}
+                    <div style={{ marginBottom: 15, fontSize: '0.85rem' }}>
+                      <h5 style={{ margin: '0 0 6px 0', color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: 0.5, textTransform: 'uppercase' }}>Kunduppgifter:</h5>
+                      <div><strong>Namn:</strong> {checkoutFirstName} {checkoutLastName}</div>
+                      <div><strong>Telefon:</strong> {checkoutPhone}</div>
+                    </div>
+
+                    {/* Purchased Items */}
+                    <div style={{ marginBottom: 15 }}>
+                      <h5 style={{ margin: '0 0 6px 0', color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: 0.5, textTransform: 'uppercase' }}>Beställda varor:</h5>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {purchasedItems.map((item, idx) => (
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 4 }}>
+                            <div>
+                              <span>{item.product_name}</span>
+                              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                Storlek: {item.variant.size} | Färg: {item.variant.color || 'Uni'}
+                              </span>
+                            </div>
+                            <span style={{ fontWeight: 600 }}>{item.variant.selling_price} kr</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Delivery & Payment Info */}
+                    <div style={{ marginBottom: 15, padding: '10px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: 6, border: '1px solid var(--border-light)', fontSize: '0.85rem' }}>
+                      <div style={{ marginBottom: 6 }}>
+                        <strong>Leveranssätt:</strong>{' '}
+                        {checkoutDeliveryMethod === 'shipping' ? (
+                          <span style={{ color: '#60a5fa', fontWeight: 600 }}>PostNord Hemleverans</span>
+                        ) : (
+                          <span style={{ color: '#fbbf24', fontWeight: 600 }}>Hämtas i butik (Ramdala Krukor)</span>
+                        )}
+                      </div>
+                      
+                      {checkoutDeliveryMethod === 'shipping' && checkoutShippingAddress && (
+                        <div style={{ marginBottom: 6, color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
+                          <strong>Mottagaradress:</strong> {checkoutShippingAddress}
+                        </div>
+                      )}
+
+                      <div>
+                        <strong>Betalsätt:</strong>{' '}
+                        {paymentStep === 'swish_success' ? (
+                          <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>✓ Swish (Betald online)</span>
+                        ) : (
+                          <span style={{ color: 'var(--text-secondary)' }}>Betalas i butik vid upphämtning</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Price Spec */}
+                    {(() => {
+                      const originalTotal = purchasedItems.reduce((sum, item) => sum + (item.variant.selling_price * item.quantity), 0);
+                      const discountAmount = cartDiscountValid ? Math.round(originalTotal * (cartDiscountPercent / 100)) : 0;
+                      
+                      const firstItem = purchasedItems[0] || {};
+                      const cat = firstItem.product_category;
+                      const config = projectConfigs[cat] || { shipping_cost: 0 };
+                      const shippingCost = (checkoutDeliveryMethod === 'shipping') ? (config.shipping_cost || 0) : 0;
+                      const finalTotal = originalTotal - discountAmount + shippingCost;
+
+                      return (
+                        <div style={{ borderTop: '1px dashed var(--border-light)', paddingTop: 10, fontSize: '0.85rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <span style={{ color: 'var(--text-secondary)' }}>Produktsumma:</span>
+                            <span>{originalTotal} kr</span>
+                          </div>
+                          {cartDiscountValid && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-success)', marginBottom: 4 }}>
+                              <span>Rabatt (-{cartDiscountPercent}%):</span>
+                              <span>-{discountAmount} kr</span>
+                            </div>
+                          )}
+                          {checkoutDeliveryMethod === 'shipping' && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa', marginBottom: 4 }}>
+                              <span>PostNord Frakt:</span>
+                              <span>+{shippingCost} kr</span>
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-light)', paddingTop: 6, marginTop: 6, fontSize: '1rem', fontWeight: 800 }}>
+                            <span>Totalt:</span>
+                            <span style={{ color: 'var(--color-success)' }}>{finalTotal} kr</span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="no-print" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="btn btn-primary btn-full"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px' }}
+                    >
+                      <FileSpreadsheet style={{ width: 16, height: 16 }} />
+                      <span>Skriv ut / Spara PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCartModalOpen(false);
+                        setPaymentStep('idle');
+                        // Clear checkout states
+                        setCheckoutFirstName('');
+                        setCheckoutLastName('');
+                        setCheckoutPhone('');
+                        setCheckoutShippingAddress('');
+                        setCheckoutMessage('');
+                        setCartDiscountCode('');
+                        setCartDiscountPercent(0);
+                        setCartDiscountValid(false);
+                        setPurchasedItems([]);
+                      }}
+                      className="btn btn-ghost btn-full"
+                      style={{ padding: '10px' }}
+                    >
+                      Stäng kvitto
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {paymentStep === 'swish_failed' && (
+                <div style={{ textAlign: 'center', padding: '30px 10px' }}>
+                  <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(239,68,68,0.1)', border: '2px solid var(--color-danger)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px auto' }}>
+                    <X style={{ color: 'var(--color-danger)', width: 32, height: 32 }} />
+                  </div>
+                  <h3 style={{ marginBottom: 10, color: 'var(--color-danger)' }}>Betalningen misslyckades</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', lineHeight: 1.5, marginBottom: 20 }}>
+                    Kunde inte slutföra din Swish-betalning. Vänligen kontrollera ditt Swish-nummer eller försök igen.
+                  </p>
+                  <button type="button" onClick={() => setPaymentStep('idle')} className="btn btn-primary btn-full">
+                    Försök igen
+                  </button>
+                </div>
+              )}
+
+              {paymentStep === 'idle' && (
+                <>
+                  {publicCart.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px 10px' }}>
+                      <ShoppingCart style={{ width: 48, height: 48, color: 'var(--text-muted)', marginBottom: 15 }} />
+                      <h3>Din varukorg är tom</h3>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 20 }}>Gå till katalogen och lägg till produkter.</p>
+                      <button onClick={() => setCartModalOpen(false)} className="btn btn-primary">Tillbaka till butiken</button>
+                    </div>
+                  ) : (() => {
+                    const firstItem = publicCart[0];
+                    const cat = firstItem.product_category;
+                    const config = projectConfigs[cat] || { checkout_mode: 'booking', delivery_method: 'pickup', shipping_cost: 0 };
+                    
+                    const isEcom = config.checkout_mode === 'ecommerce';
+                    const hasShipping = config.delivery_method === 'shipping_pickup';
+                    
+                    // Math calculations
+                    const originalTotal = publicCart.reduce((sum, item) => sum + (item.variant.selling_price * item.quantity), 0);
+                    const discountAmount = cartDiscountValid ? Math.round(originalTotal * (cartDiscountPercent / 100)) : 0;
+                    const shippingCost = (isEcom && hasShipping && checkoutDeliveryMethod === 'shipping') ? (config.shipping_cost || 0) : 0;
+                    const finalTotal = originalTotal - discountAmount + shippingCost;
+
+                    return (
+                      <form onSubmit={handleCheckoutCart}>
+                        {/* Cart items list */}
+                        <div style={{ marginBottom: 20 }}>
+                          <h4 style={{ color: 'var(--color-primary)', marginBottom: 10 }}>Dina valda produkter:</h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            {publicCart.map((item) => (
+                              <div key={item.variant.id} className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 15px', background: 'rgba(255,255,255,0.02)' }}>
+                                <div>
+                                  <strong style={{ display: 'block', fontSize: '0.95rem' }}>{item.product_name}</strong>
+                                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                    Storlek: {item.variant.size} | Färg: {item.variant.color || 'Uni'}
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
+                                  <strong style={{ color: 'var(--color-success)', fontSize: '0.95rem' }}>{item.variant.selling_price} kr</strong>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPublicCart(publicCart.filter(c => c.variant.id !== item.variant.id))}
+                                    style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: 4 }}
+                                    title="Ta bort"
+                                  >
+                                    <Trash2 style={{ width: 14, height: 14 }} />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Customer Form */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 12 }}>
+                          <div className="input-container">
+                            <label>Förnamn *</label>
+                            <input
+                              type="text"
+                              value={checkoutFirstName}
+                              onChange={(e) => setCheckoutFirstName(e.target.value)}
+                              required
+                              placeholder="Ditt förnamn..."
+                              style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                            />
+                          </div>
+                          <div className="input-container">
+                            <label>Efternamn *</label>
+                            <input
+                              type="text"
+                              value={checkoutLastName}
+                              onChange={(e) => setCheckoutLastName(e.target.value)}
+                              required
+                              placeholder="Ditt efternamn..."
+                              style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label>Telefonnummer {isEcom && '(för Swish)'} *</label>
+                          <input
+                            type="tel"
+                            value={checkoutPhone}
+                            onChange={(e) => setCheckoutPhone(e.target.value)}
+                            required
+                            placeholder="T.ex. 0701234567"
+                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                        </div>
+
+                        {/* Discount Code */}
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label>Rabattkod (Frivillig)</label>
+                          <input
+                            type="text"
+                            value={cartDiscountCode}
+                            onChange={(e) => checkCartDiscountCode(e.target.value)}
+                            placeholder="Skriv kod här..."
+                            style={{
+                              width: '100%',
+                              padding: 10,
+                              background: 'rgba(0,0,0,0.2)',
+                              border: cartDiscountValid ? '1px solid var(--color-success)' : cartDiscountError ? '1px solid var(--color-danger)' : '1px solid var(--border-light)',
+                              color: 'white',
+                              borderRadius: 4
+                            }}
+                          />
+                          {cartDiscountValid && (
+                            <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-success)', marginTop: 4 }}>
+                              ✓ Kod aktiverad! Ger {cartDiscountPercent}% rabatt.
+                            </span>
+                          )}
+                          {cartDiscountError && (
+                            <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-danger)', marginTop: 4 }}>
+                              ✗ {cartDiscountError}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Delivery options if ecommerce & shipping option available */}
+                        {isEcom && hasShipping && (
+                          <div style={{ marginBottom: 15 }}>
+                            <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Leveransmetod *</label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                              <button
+                                type="button"
+                                onClick={() => setCheckoutDeliveryMethod('pickup')}
+                                className={`btn btn-sm ${checkoutDeliveryMethod === 'pickup' ? 'btn-primary' : 'btn-secondary'}`}
+                                style={{ padding: 10, fontSize: '0.85rem' }}
+                              >
+                                Hämta i butik (0 kr)
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCheckoutDeliveryMethod('shipping')}
+                                className={`btn btn-sm ${checkoutDeliveryMethod === 'shipping' ? 'btn-primary' : 'btn-secondary'}`}
+                                style={{ padding: 10, fontSize: '0.85rem' }}
+                              >
+                                PostNord Frakt (+{config.shipping_cost} kr)
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Delivery Address if Postnord chosen */}
+                        {isEcom && hasShipping && checkoutDeliveryMethod === 'shipping' && (
+                          <div className="input-container" style={{ marginBottom: 12 }}>
+                            <label>Leveransadress *</label>
+                            <textarea
+                              value={checkoutShippingAddress}
+                              onChange={(e) => setCheckoutShippingAddress(e.target.value)}
+                              required
+                              placeholder="Ange fullständig adress (Gata, Postnummer, Ort)..."
+                              style={{ width: '100%', height: 70, padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                            />
+                          </div>
+                        )}
+
+                        <div className="input-container" style={{ marginBottom: 20 }}>
+                          <label>Meddelande till butiken (Valfritt)</label>
+                          <textarea
+                            value={checkoutMessage}
+                            onChange={(e) => setCheckoutMessage(e.target.value)}
+                            placeholder="Skriv dina önskemål eller meddelande här..."
+                            style={{ width: '100%', height: 60, padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                        </div>
+
+                        {/* Order Summary */}
+                        <div className="glass-panel" style={{ padding: 15, marginBottom: 20, background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)' }}>
+                          <h4 style={{ margin: '0 0 10px 0', borderBottom: '1px solid var(--border-light)', paddingBottom: 6 }}>Prisöversikt:</h4>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.9rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: 'var(--text-secondary)' }}>Produktsumma:</span>
+                              <span>{originalTotal} kr</span>
+                            </div>
+                            
+                            {cartDiscountValid && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-success)', fontWeight: 600 }}>
+                                <span>Rabatt (Kod: {cartDiscountCode.toUpperCase()} -{cartDiscountPercent}%):</span>
+                                <span>-{discountAmount} kr</span>
+                              </div>
+                            )}
+
+                            {isEcom && hasShipping && checkoutDeliveryMethod === 'shipping' && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
+                                <span>PostNord Hemleverans:</span>
+                                <span>+{config.shipping_cost} kr</span>
+                              </div>
+                            )}
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-light)', paddingTop: 8, marginTop: 4, fontSize: '1.05rem', fontWeight: 800 }}>
+                              <span>Totalt {isEcom ? 'att betala' : 'att boka'}:</span>
+                              <span style={{ color: 'var(--color-success)' }}>{finalTotal} kr</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Submit Button */}
+                        <button type="submit" className="btn btn-success btn-full" style={{ padding: '12px', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                          {isEcom ? (
+                            <>
+                              <ShoppingCart style={{ width: 18, height: 18 }} />
+                              <span>Betala {finalTotal} kr med Swish</span>
+                            </>
+                          ) : (
+                            <>
+                              <CalendarCheck style={{ width: 18, height: 18 }} />
+                              <span>Bekräfta bokning ({finalTotal} kr)</span>
+                            </>
+                          )}
+                        </button>
+                      </form>
+                    );
+                  })()}
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -138,4 +138,58 @@ export class SettingsController {
     await this.settingsService.deleteDiscountCode(id);
     return { success: true };
   }
+
+  @Get('public/projects/config')
+  async getProjectConfig(@Query('project') project: string) {
+    const p = project || 'Allmänt';
+    return this.settingsService.getProjectConfig(p);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('projects/config')
+  @HttpCode(HttpStatus.OK)
+  async setProjectConfig(
+    @Body()
+    body: {
+      project: string;
+      checkout_mode: string;
+      delivery_method: string;
+      shipping_cost: number;
+    },
+  ) {
+    await this.settingsService.setProjectConfig(body.project, {
+      checkout_mode: body.checkout_mode,
+      delivery_method: body.delivery_method,
+      shipping_cost: parseFloat(body.shipping_cost as any || 0.0),
+    });
+    return { success: true };
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Get('settings/swish')
+  async getSwishConfig() {
+    return this.settingsService.getSwishConfig();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('settings/swish')
+  @HttpCode(HttpStatus.OK)
+  async setSwishConfig(
+    @Body()
+    body: {
+      merchant_id: string;
+      cert: string;
+      key: string;
+    },
+  ) {
+    await this.settingsService.setSwishConfig({
+      merchant_id: body.merchant_id || '',
+      cert: body.cert || '',
+      key: body.key || '',
+    });
+    return { success: true, message: 'Swish-inställningarna har sparats.' };
+  }
 }
