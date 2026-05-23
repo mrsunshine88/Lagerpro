@@ -13,6 +13,12 @@ export class DiscountCode {
 
   @Property({ type: 'float', default: 0.0 })
   discountPercent = 0.0;
+  
+  @Property({ type: 'boolean', default: false })
+  freeShipping = false;
+
+  @Property({ nullable: true })
+  validUntil?: Date;
 
   @Property({ defaultRaw: 'CURRENT_TIMESTAMP' })
   createdAt = new Date();

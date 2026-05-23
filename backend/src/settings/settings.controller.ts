@@ -106,12 +106,14 @@ export class SettingsController {
   @Post('discount-codes')
   @HttpCode(HttpStatus.OK)
   async createDiscountCode(
-    @Body() body: { code: string; project: string; discount_percent: number },
+    @Body() body: { code: string; project: string; discount_percent: number; free_shipping?: boolean; valid_until?: string },
   ) {
     return this.settingsService.createDiscountCode({
       code: body.code,
       project: body.project,
       discountPercent: parseFloat(body.discount_percent as any || 0.0),
+      freeShipping: !!body.free_shipping,
+      validUntil: body.valid_until,
     });
   }
 
@@ -121,12 +123,14 @@ export class SettingsController {
   @HttpCode(HttpStatus.OK)
   async updateDiscountCode(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { code: string; project: string; discount_percent: number },
+    @Body() body: { code: string; project: string; discount_percent: number; free_shipping?: boolean; valid_until?: string },
   ) {
     return this.settingsService.updateDiscountCode(id, {
       code: body.code,
       project: body.project,
       discountPercent: parseFloat(body.discount_percent as any || 0.0),
+      freeShipping: !!body.free_shipping,
+      validUntil: body.valid_until,
     });
   }
 

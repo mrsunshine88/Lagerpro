@@ -253,10 +253,12 @@ export class SettingsService {
     return this.discountCodeRepository.find({}, { orderBy: { code: 'ASC' } });
   }
 
-  async createDiscountCode(data: { code: string; project: string; discountPercent: number }): Promise<DiscountCode> {
+  async createDiscountCode(data: { code: string; project: string; discountPercent: number; freeShipping?: boolean; validUntil?: string | Date }): Promise<DiscountCode> {
     const code = data.code.trim().toUpperCase();
     const project = data.project.trim();
     const percent = data.discountPercent;
+    const freeShipping = !!data.freeShipping;
+    const validUntil = data.validUntil ? new Date(data.validUntil) : undefined;
 
     if (!code) {
       throw new BadRequestException('Rabattkod kan inte vara tom.');
@@ -274,16 +276,20 @@ export class SettingsService {
     dc.code = code;
     dc.project = project;
     dc.discountPercent = percent;
+    dc.freeShipping = freeShipping;
+    dc.validUntil = validUntil;
 
     this.em.persist(dc);
     await this.em.flush();
     return dc;
   }
 
-  async updateDiscountCode(id: number, data: { code: string; project: string; discountPercent: number }): Promise<DiscountCode> {
+  async updateDiscountCode(id: number, data: { code: string; project: string; discountPercent: number; freeShipping?: boolean; validUntil?: string | Date }): Promise<DiscountCode> {
     const code = data.code.trim().toUpperCase();
     const project = data.project.trim();
     const percent = data.discountPercent;
+    const freeShipping = !!data.freeShipping;
+    const validUntil = data.validUntil ? new Date(data.validUntil) : undefined;
 
     if (!code) {
       throw new BadRequestException('Rabattkod kan inte vara tom.');
@@ -305,6 +311,8 @@ export class SettingsService {
     dc.code = code;
     dc.project = project;
     dc.discountPercent = percent;
+    dc.freeShipping = freeShipping;
+    dc.validUntil = validUntil;
 
     await this.em.flush();
     return dc;
@@ -319,21 +327,30 @@ export class SettingsService {
     await this.em.flush();
   }
 
-  async validateDiscountCode(code: string, productCategory?: string): Promise<{ valid: boolean; discountPercent: number; project: string }> {
+  async validateDiscountCode(code: string, productCategory?: string): Promise<{ valid: boolean; discountPercent: number; project: string; freeShipping: boolean; isExpired?: boolean }> {
     const cleanCode = code.trim().toUpperCase();
     const dc = await this.discountCodeRepository.findOne({ code: cleanCode });
     if (!dc) {
-      return { valid: false, discountPercent: 0, project: '' };
+      return { valid: false, discountPercent: 0, project: '', freeShipping: false };
+    }
+
+    // Check if expired
+    if (dc.validUntil) {
+      const expirationDate = new Date(dc.validUntil);
+      expirationDate.setHours(23, 59, 59, 999);
+      if (new Date() > expirationDate) {
+        return { valid: false, discountPercent: 0, project: dc.project, freeShipping: false, isExpired: true };
+      }
     }
 
     if (productCategory) {
       const matchProject = dc.project.toLowerCase();
       const cat = productCategory.toLowerCase();
       if (matchProject !== 'alla' && matchProject !== 'allmänt' && matchProject !== 'all' && matchProject !== cat) {
-        return { valid: false, discountPercent: 0, project: dc.project };
+        return { valid: false, discountPercent: 0, project: dc.project, freeShipping: false };
       }
     }
 
-    return { valid: true, discountPercent: dc.discountPercent, project: dc.project };
+    return { valid: true, discountPercent: dc.discountPercent, project: dc.project, freeShipping: dc.freeShipping };
   }
 }

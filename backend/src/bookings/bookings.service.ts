@@ -131,14 +131,38 @@ export class BookingsService {
         throw new NotFoundException('Bokningen hittades inte');
       }
 
-      if (booking.status !== 'pending' && booking.status !== 'reserved') {
-        throw new BadRequestException(`Bokningen kan inte avbrytas eftersom den har status: ${booking.status}`);
+      if (booking.status === 'cancelled') {
+        throw new BadRequestException('Bokningen är redan avbruten/återbetald');
       }
 
+      const wasConfirmed = booking.status === 'confirmed';
+      const wasPaid = booking.paymentStatus === 'paid';
+
       booking.status = 'cancelled';
+      if (wasPaid) {
+        booking.paymentStatus = 'refunded';
+      }
 
       // Increment variant stock back by 1
       booking.variant.stock += 1;
+
+      // If it was paid (either confirmed or reserved but paid), we write a negative transaction to reverse the economy page!
+      if (wasPaid) {
+        let sellingPrice = booking.variant.sellingPrice;
+        if (booking.discountPercent > 0) {
+          sellingPrice = Math.round(booking.variant.sellingPrice * (1.0 - booking.discountPercent / 100.0));
+        }
+
+        const refundTransaction = new Transaction();
+        refundTransaction.variant = booking.variant;
+        refundTransaction.type = 'sale';
+        refundTransaction.quantity = -1; // Negative to subtract from sales metrics
+        refundTransaction.purchasePrice = booking.variant.purchasePrice;
+        refundTransaction.sellingPrice = sellingPrice;
+        refundTransaction.createdAt = new Date();
+
+        em.persist(refundTransaction);
+      }
     });
   }
 
@@ -210,6 +234,7 @@ export class BookingsService {
 
         let discountPercent = 0.0;
         let appliedCode: string | undefined = undefined;
+        let freeShippingApplied = false;
 
         if (discountCode && discountCode.trim()) {
           const cleanCode = discountCode.trim().toUpperCase();
@@ -220,6 +245,9 @@ export class BookingsService {
             if (matchProject === 'alla' || matchProject === 'allmänt' || matchProject === 'all' || matchProject === category) {
               discountPercent = dc.discountPercent;
               appliedCode = dc.code;
+              if (dc.freeShipping) {
+                freeShippingApplied = true;
+              }
             } else {
               throw new BadRequestException(`Rabattkoden ${cleanCode} gäller inte för denna kategori (${variant.product.category}).`);
             }
@@ -240,7 +268,7 @@ export class BookingsService {
         booking.paymentStatus = paymentStatus || 'pending';
         booking.deliveryMethod = deliveryMethod || 'pickup';
         booking.shippingAddress = shippingAddress ? shippingAddress.trim() : undefined;
-        booking.shippingCost = shippingCost || 0.0;
+        booking.shippingCost = freeShippingApplied ? 0.0 : (shippingCost || 0.0);
 
         em.persist(booking);
         

@@ -80,10 +80,10 @@ interface Booking {
   discount_percent?: number;
   original_selling_price?: number;
   message?: string;
-  paymentStatus?: string;
-  deliveryMethod?: string;
-  shippingAddress?: string;
-  shippingCost?: number;
+  payment_status?: string;
+  delivery_method?: string;
+  shipping_address?: string;
+  shipping_cost?: number;
 }
 
 interface CartItem {
@@ -227,7 +227,10 @@ export default function App() {
   const [newDiscountCode, setNewDiscountCode] = useState('');
   const [newDiscountProject, setNewDiscountProject] = useState('Allmänt');
   const [newDiscountPercent, setNewDiscountPercent] = useState(0);
+  const [newDiscountFreeShipping, setNewDiscountFreeShipping] = useState(false);
+  const [newDiscountValidUntil, setNewDiscountValidUntil] = useState('');
   const [editingDiscountId, setEditingDiscountId] = useState<number | null>(null);
+  const [posShowCartMobile, setPosShowCartMobile] = useState(false);
 
   // Swish Global settings
   const [swishMerchantId, setSwishMerchantId] = useState('');
@@ -248,6 +251,7 @@ export default function App() {
   const [cartDiscountPercent, setCartDiscountPercent] = useState(0);
   const [cartDiscountValid, setCartDiscountValid] = useState(false);
   const [cartDiscountError, setCartDiscountError] = useState('');
+  const [cartDiscountFreeShipping, setCartDiscountFreeShipping] = useState(false);
   const [purchasedItems, setPurchasedItems] = useState<any[]>([]);
   
   // Checkout & Payment states
@@ -344,6 +348,16 @@ export default function App() {
       setBookingDiscountError('');
     }
   }, [bookingModalOpen]);
+
+  // Manage POS tab body class for mobile styling
+  useEffect(() => {
+    if (activeTab === 'pos') {
+      document.body.classList.add('pos-tab-active');
+    } else {
+      document.body.classList.remove('pos-tab-active');
+      setPosShowCartMobile(false);
+    }
+  }, [activeTab]);
 
   // --- API CALLS ---
   const fetchPublicConfigsForProducts = async (prods: any[]) => {
@@ -683,7 +697,9 @@ export default function App() {
           {
             code: newDiscountCode.trim(),
             project: newDiscountProject,
-            discount_percent: newDiscountPercent
+            discount_percent: newDiscountPercent,
+            free_shipping: newDiscountFreeShipping,
+            valid_until: newDiscountValidUntil || null
           },
           getAxiosConfig()
         );
@@ -694,7 +710,9 @@ export default function App() {
           {
             code: newDiscountCode.trim(),
             project: newDiscountProject,
-            discount_percent: newDiscountPercent
+            discount_percent: newDiscountPercent,
+            free_shipping: newDiscountFreeShipping,
+            valid_until: newDiscountValidUntil || null
           },
           getAxiosConfig()
         );
@@ -702,6 +720,8 @@ export default function App() {
       }
       setNewDiscountCode('');
       setNewDiscountPercent(0);
+      setNewDiscountFreeShipping(false);
+      setNewDiscountValidUntil('');
       setEditingDiscountId(null);
       fetchDiscountCodes();
     } catch (err: any) {
@@ -726,6 +746,7 @@ export default function App() {
     if (!code.trim()) {
       setCartDiscountValid(false);
       setCartDiscountPercent(0);
+      setCartDiscountFreeShipping(false);
       setCartDiscountError('');
       return;
     }
@@ -738,15 +759,18 @@ export default function App() {
       if (res.data.valid) {
         setCartDiscountValid(true);
         setCartDiscountPercent(res.data.discountPercent);
+        setCartDiscountFreeShipping(!!res.data.freeShipping);
         setCartDiscountError('');
       } else {
         setCartDiscountValid(false);
         setCartDiscountPercent(0);
+        setCartDiscountFreeShipping(false);
         setCartDiscountError(res.data.project ? `Gäller endast kategori "${res.data.project}"` : 'Ogiltig rabattkod');
       }
     } catch (e) {
       setCartDiscountValid(false);
       setCartDiscountPercent(0);
+      setCartDiscountFreeShipping(false);
       setCartDiscountError('Kunde inte verifiera koden.');
     }
   };
@@ -762,7 +786,7 @@ export default function App() {
     
     const isEcom = config.checkout_mode === 'ecommerce';
     const isShipping = isEcom && checkoutDeliveryMethod === 'shipping';
-    const shippingCost = isShipping ? (config.shipping_cost || 0) : 0;
+    const shippingCost = isShipping ? (cartDiscountValid && cartDiscountFreeShipping ? 0 : (config.shipping_cost || 0)) : 0;
 
     try {
       // 1. Create bookings in a batch
@@ -1481,7 +1505,7 @@ export default function App() {
             {/* --- TAB: KASSA (POS) --- */}
             {activeTab === 'pos' && (
               <div className="tab-pane">
-                <div className="pos-wrapper" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
+                <div className={`pos-wrapper ${posShowCartMobile ? 'show-cart' : ''}`} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
                   <div className="pos-products-panel glass-card" style={{ padding: 20 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
                       <h2 style={{ margin: 0, fontSize: '1.3rem' }}>Kassa &amp; Snabbköp</h2>
@@ -1531,6 +1555,14 @@ export default function App() {
 
                   <div className="pos-cart-panel glass-card" style={{ padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: 'fit-content' }}>
                     <div>
+                      <button
+                        onClick={() => setPosShowCartMobile(false)}
+                        className="pos-mobile-back-btn"
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}
+                      >
+                        <ArrowRight style={{ width: 14, height: 14, transform: 'rotate(180deg)' }} />
+                        <span>Tillbaka till produkter</span>
+                      </button>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid var(--border-light)', paddingBottom: 10 }}>
                         <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
                           <ShoppingBag style={{ color: 'var(--color-primary)' }} />
@@ -1596,6 +1628,15 @@ export default function App() {
                       </button>
                     </div>
                   </div>
+                  
+                  {/* Floating Mobile Cart Button */}
+                  <button
+                    onClick={() => setPosShowCartMobile(true)}
+                    className="pos-mobile-cart-btn"
+                  >
+                    <ShoppingCart style={{ width: 16, height: 16 }} />
+                    <span>Visa order ({cart.reduce((sum, item) => sum + item.quantity, 0)} st)</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -1767,7 +1808,7 @@ export default function App() {
             {activeTab === 'bookings' && (
               <div className="tab-pane">
                 <section className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
-                  <h2>Kundreservationer &amp; Bokningar</h2>
+                  <h2>Orderhistorik &amp; Kundreservationer</h2>
                   <button onClick={fetchBookings} className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <RefreshCw style={{ width: 14, height: 14 }} />
                     <span>Ladda om listan</span>
@@ -1776,7 +1817,7 @@ export default function App() {
 
                 <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
                   <div style={{ overflowX: 'auto' }}>
-                    <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                    <table className="custom-table bookings-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                       <thead>
                         <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border-light)' }}>
                           <th style={{ padding: '12px 15px' }}>Boknings-ID</th>
@@ -1792,17 +1833,19 @@ export default function App() {
                       <tbody>
                         {bookings.map((b) => (
                           <tr key={b.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                            <td style={{ padding: '12px 15px' }}><strong>#{b.id}</strong></td>
-                            <td style={{ padding: '12px 15px' }}>
+                            <td data-label="Bokning ID" style={{ padding: '12px 15px' }}><strong>#{b.id}</strong></td>
+                            <td data-label="Kundnamn" style={{ padding: '12px 15px' }}>
                               <div>
                                 {b.customer_first_name} {b.customer_last_name}
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
-                                  {b.paymentStatus === 'paid' ? (
+                                  {b.payment_status === 'paid' ? (
                                     <span className="badge" style={{ display: 'inline-block', padding: '2px 6px', fontSize: '0.7rem', fontWeight: 600, background: 'rgba(16, 185, 129, 0.15)', color: 'var(--color-success)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>✓ BETALD (Swish)</span>
+                                  ) : b.payment_status === 'refunded' ? (
+                                    <span className="badge" style={{ display: 'inline-block', padding: '2px 6px', fontSize: '0.7rem', fontWeight: 600, background: 'rgba(239, 68, 68, 0.15)', color: 'var(--color-danger)', border: '1px solid rgba(239, 68, 68, 0.3)' }}>ÅTERBETALD</span>
                                   ) : (
                                     <span className="badge" style={{ display: 'inline-block', padding: '2px 6px', fontSize: '0.7rem', fontWeight: 600, background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-secondary)' }}>BUTIKSBETALNING</span>
                                   )}
-                                  {b.deliveryMethod === 'shipping' ? (
+                                  {b.delivery_method === 'shipping' ? (
                                     <span className="badge" style={{ display: 'inline-block', padding: '2px 6px', fontSize: '0.7rem', fontWeight: 600, background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)' }}>FRAKTAS (PostNord)</span>
                                   ) : (
                                     <span className="badge" style={{ display: 'inline-block', padding: '2px 6px', fontSize: '0.7rem', fontWeight: 600, background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-secondary)' }}>HÄMTAS I BUTIK</span>
@@ -1810,8 +1853,8 @@ export default function App() {
                                 </div>
                               </div>
                             </td>
-                            <td style={{ padding: '12px 15px' }}><a href={`tel:${b.customer_phone}`} style={{ color: 'var(--color-primary)' }}>{b.customer_phone}</a></td>
-                            <td style={{ padding: '12px 15px' }}>
+                            <td data-label="Telefon" style={{ padding: '12px 15px' }}><a href={`tel:${b.customer_phone}`} style={{ color: 'var(--color-primary)' }}>{b.customer_phone}</a></td>
+                            <td data-label="Produkt / Storlek / Färg" style={{ padding: '12px 15px' }}>
                               <strong>{b.product_name}</strong>
                               <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>St: {b.size} | Färg: {b.color || 'Uni'} | SKU: {b.sku}</span>
                               {b.message && (
@@ -1819,15 +1862,15 @@ export default function App() {
                                   <strong>Meddelande:</strong> "{b.message}"
                                 </div>
                               )}
-                              {b.deliveryMethod === 'shipping' && b.shippingAddress && (
+                              {b.delivery_method === 'shipping' && b.shipping_address && (
                                 <div style={{ marginTop: 6, padding: '6px 10px', background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.15)', borderRadius: 4, fontSize: '0.8rem', color: '#93c5fd', maxWidth: 280, whiteSpace: 'normal', wordBreak: 'break-word' }}>
                                   <strong>Mottagaradress:</strong>
-                                  <span style={{ display: 'block', marginTop: 2 }}>{b.shippingAddress}</span>
-                                  {b.shippingCost !== undefined && b.shippingCost > 0 && <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2 }}>Fraktavgift: {b.shippingCost} kr</span>}
+                                  <span style={{ display: 'block', marginTop: 2 }}>{b.shipping_address}</span>
+                                  {b.shipping_cost !== undefined && b.shipping_cost > 0 && <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2 }}>Fraktavgift: {b.shipping_cost} kr</span>}
                                 </div>
                               )}
                             </td>
-                            <td style={{ padding: '12px 15px' }}>
+                            <td data-label="Pris" style={{ padding: '12px 15px' }}>
                               <strong>{b.selling_price} kr</strong>
                               {b.discount_code && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
@@ -1836,31 +1879,50 @@ export default function App() {
                                 </div>
                               )}
                             </td>
-                            <td style={{ padding: '12px 15px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{new Date(b.created_at).toLocaleString('sv-SE')}</td>
-                            <td style={{ padding: '12px 15px' }}>
+                            <td data-label="Datum" style={{ padding: '12px 15px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{new Date(b.created_at).toLocaleString('sv-SE')}</td>
+                            <td data-label="Status" style={{ padding: '12px 15px' }}>
                               <span className={`status-badge status-${b.status}`}>
-                                {b.status === 'pending' && 'Väntar'}
+                                {b.status === 'pending' && (b.payment_status === 'swish_pending' ? 'Väntar Swish' : 'Väntar')}
                                 {b.status === 'reserved' && 'Undanlagd'}
-                                {b.status === 'confirmed' && (b.paymentStatus === 'paid' ? 'Överlämnad' : 'Hämtad')}
-                                {b.status === 'cancelled' && 'Avbruten'}
+                                {b.status === 'confirmed' && (b.payment_status === 'paid' ? 'Överlämnad' : 'Hämtad')}
+                                {b.status === 'cancelled' && (b.payment_status === 'refunded' ? 'Återbetald' : b.payment_status === 'expired' ? 'Utgått Swish' : 'Avbruten')}
                               </span>
                             </td>
-                            <td style={{ padding: '12px 15px', textAlign: 'right' }}>
+                            <td data-label="Åtgärder" style={{ padding: '12px 15px', textAlign: 'right' }}>
                               {b.status === 'pending' && (
                                 <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                                   <button onClick={() => handleReserveBooking(b.id)} className="btn btn-secondary btn-xs" style={{ borderColor: 'var(--color-accent)', color: 'var(--color-accent)' }}>Reservera</button>
-                                  <button onClick={() => handleConfirmBooking(b.id)} className="btn btn-success btn-xs">{b.paymentStatus === 'paid' ? 'Bekräfta överlämning' : 'Bekräfta hämtning'}</button>
+                                  <button onClick={() => handleConfirmBooking(b.id)} className="btn btn-success btn-xs">{b.payment_status === 'paid' ? 'Bekräfta överlämning' : 'Bekräfta hämtning'}</button>
                                   <button onClick={() => handleCancelBooking(b.id)} className="btn btn-ghost btn-xs" style={{ color: 'var(--color-danger)' }}>Avbryt</button>
                                 </div>
                               )}
                               {b.status === 'reserved' && (
                                 <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                                  <button onClick={() => handleConfirmBooking(b.id)} className="btn btn-success btn-xs">{b.paymentStatus === 'paid' ? 'Bekräfta överlämning' : 'Bekräfta hämtning'}</button>
+                                  <button onClick={() => handleConfirmBooking(b.id)} className="btn btn-success btn-xs">{b.payment_status === 'paid' ? 'Bekräfta överlämning' : 'Bekräfta hämtning'}</button>
                                   <button onClick={() => handleCancelBooking(b.id)} className="btn btn-ghost btn-xs" style={{ color: 'var(--color-danger)' }}>Avbryt</button>
                                 </div>
                               )}
-                              {b.status === 'confirmed' && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{b.paymentStatus === 'paid' ? 'Överlämnad' : 'Hämtad'}</span>}
-                              {b.status === 'cancelled' && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Raderad/Återställd</span>}
+                              {b.status === 'confirmed' && (
+                                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
+                                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{b.payment_status === 'paid' ? 'Överlämnad' : 'Hämtad'}</span>
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Är du säker på att du vill ångra köpet för bokning #${b.id}? Skorna återförs till lagret (+1) och omsättningen justeras tillbaka på ekonomisidan.`)) {
+                                        handleCancelBooking(b.id);
+                                      }
+                                    }}
+                                    className="btn btn-ghost btn-xs"
+                                    style={{ color: 'var(--color-danger)', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '2px 8px', borderRadius: 4 }}
+                                  >
+                                    Ångra köp
+                                  </button>
+                                </div>
+                              )}
+                              {b.status === 'cancelled' && (
+                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                  {b.payment_status === 'refunded' ? 'Återbetald (Ångrad)' : b.payment_status === 'expired' ? 'Utgått Swish' : 'Raderad/Återställd'}
+                                </span>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -2603,7 +2665,7 @@ export default function App() {
                   <div>
                     <h3>Hantera Rabattkoder</h3>
                     <form onSubmit={handleSaveDiscountCode} style={{ marginBottom: 15, background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', padding: 12, borderRadius: 6 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.2fr 0.8fr', gap: 10, marginBottom: 12 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.2fr 0.8fr 1.2fr 0.8fr', gap: 10, marginBottom: 12 }}>
                         <div className="input-container">
                           <label style={{ fontSize: '0.75rem', marginBottom: 4 }}>Välj projekt/kategori</label>
                           <select
@@ -2646,6 +2708,26 @@ export default function App() {
                             style={{ width: '100%', padding: 8, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, height: 38 }}
                           />
                         </div>
+                        <div className="input-container">
+                          <label style={{ fontSize: '0.75rem', marginBottom: 4 }}>Giltig t.o.m (Valfritt)</label>
+                          <input
+                            type="date"
+                            value={newDiscountValidUntil}
+                            onChange={(e) => setNewDiscountValidUntil(e.target.value)}
+                            style={{ width: '100%', padding: 8, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, height: 38 }}
+                          />
+                        </div>
+                        <div className="input-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', paddingBottom: 6 }}>
+                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '0.85rem', userSelect: 'none', color: 'white', marginTop: 4 }}>
+                            <input
+                              type="checkbox"
+                              checked={newDiscountFreeShipping}
+                              onChange={(e) => setNewDiscountFreeShipping(e.target.checked)}
+                              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary)' }}
+                            />
+                            <span>Fri frakt</span>
+                          </label>
+                        </div>
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <button type="submit" className="btn btn-primary btn-sm" style={{ flex: 1 }}>
@@ -2658,6 +2740,8 @@ export default function App() {
                               setEditingDiscountId(null);
                               setNewDiscountCode('');
                               setNewDiscountPercent(0);
+                              setNewDiscountFreeShipping(false);
+                              setNewDiscountValidUntil('');
                             }}
                             className="btn btn-ghost btn-sm"
                           >
@@ -2669,22 +2753,56 @@ export default function App() {
 
                     <h4 style={{ marginBottom: 8, fontSize: '0.85rem' }}>Aktiva rabattkoder</h4>
                     <div style={{ border: '1px solid var(--border-light)', borderRadius: 4, overflow: 'hidden', background: 'rgba(0,0,0,0.1)' }}>
-                      <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
+                      <table className="custom-table discount-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
                         <thead>
                           <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border-light)' }}>
                             <th style={{ padding: '6px 10px' }}>Kod</th>
                             <th style={{ padding: '6px 10px' }}>Projekt</th>
                             <th style={{ padding: '6px 10px' }}>Rabatt</th>
+                            <th style={{ padding: '6px 10px' }}>Fri frakt</th>
+                            <th style={{ padding: '6px 10px' }}>Giltighetstid</th>
                             <th style={{ padding: '6px 10px', textAlign: 'right' }}>Åtgärder</th>
                           </tr>
                         </thead>
                         <tbody>
                           {discountCodes.map((dc) => (
                             <tr key={dc.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                              <td style={{ padding: '6px 10px' }}><strong>{dc.code}</strong></td>
-                              <td style={{ padding: '6px 10px' }}><span className="category-tag" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>{dc.project}</span></td>
-                              <td style={{ padding: '6px 10px' }}><strong style={{ color: 'var(--color-success)' }}>-{dc.discountPercent}%</strong></td>
-                              <td style={{ padding: '6px 10px', textAlign: 'right' }}>
+                              <td data-label="Kod" style={{ padding: '6px 10px' }}><strong>{dc.code}</strong></td>
+                              <td data-label="Projekt" style={{ padding: '6px 10px' }}><span className="category-tag" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>{dc.project}</span></td>
+                              <td data-label="Rabatt" style={{ padding: '6px 10px' }}><strong style={{ color: 'var(--color-success)' }}>-{dc.discountPercent}%</strong></td>
+                              <td data-label="Fri frakt" style={{ padding: '6px 10px' }}>
+                                {dc.freeShipping ? (
+                                  <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '2px 6px', fontSize: '0.7rem' }}>Ja</span>
+                                ) : (
+                                  <span className="badge" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-secondary)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '2px 6px', fontSize: '0.7rem' }}>Nej</span>
+                                )}
+                              </td>
+                              <td data-label="Giltighetstid" style={{ padding: '6px 10px' }}>
+                                {(() => {
+                                  if (!dc.validUntil) {
+                                    return (
+                                      <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '2px 6px', fontSize: '0.7rem' }}>
+                                        För alltid
+                                      </span>
+                                    );
+                                  }
+                                  const expired = new Date() > new Date(dc.validUntil);
+                                  if (expired) {
+                                    return (
+                                      <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '2px 6px', fontSize: '0.7rem' }}>
+                                        Utgått ({dc.validUntil.split('T')[0]})
+                                      </span>
+                                    );
+                                  } else {
+                                    return (
+                                      <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '2px 6px', fontSize: '0.7rem' }}>
+                                        Giltig t.o.m {dc.validUntil.split('T')[0]}
+                                      </span>
+                                    );
+                                  }
+                                })()}
+                              </td>
+                              <td data-label="Åtgärder" style={{ padding: '6px 10px', textAlign: 'right' }}>
                                 <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                                   <button
                                     onClick={() => {
@@ -2692,6 +2810,8 @@ export default function App() {
                                       setNewDiscountCode(dc.code);
                                       setNewDiscountProject(dc.project);
                                       setNewDiscountPercent(dc.discountPercent);
+                                      setNewDiscountFreeShipping(dc.freeShipping || false);
+                                      setNewDiscountValidUntil(dc.validUntil ? dc.validUntil.split('T')[0] : '');
                                     }}
                                     className="btn btn-ghost btn-icon btn-xs"
                                     title="Redigera"
@@ -3006,7 +3126,8 @@ export default function App() {
                       const firstItem = purchasedItems[0] || {};
                       const cat = firstItem.product_category;
                       const config = projectConfigs[cat] || { shipping_cost: 0 };
-                      const shippingCost = (checkoutDeliveryMethod === 'shipping') ? (config.shipping_cost || 0) : 0;
+                      const hasFreeShipping = cartDiscountValid && cartDiscountFreeShipping;
+                      const shippingCost = (checkoutDeliveryMethod === 'shipping') ? (hasFreeShipping ? 0 : (config.shipping_cost || 0)) : 0;
                       const finalTotal = originalTotal - discountAmount + shippingCost;
 
                       return (
@@ -3024,7 +3145,7 @@ export default function App() {
                           {checkoutDeliveryMethod === 'shipping' && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa', marginBottom: 4 }}>
                               <span>PostNord Frakt:</span>
-                              <span>+{shippingCost} kr</span>
+                              <span>{hasFreeShipping ? '0 kr (Fri frakt)' : `+${shippingCost} kr`}</span>
                             </div>
                           )}
                           <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-light)', paddingTop: 6, marginTop: 6, fontSize: '1rem', fontWeight: 800 }}>
@@ -3107,7 +3228,8 @@ export default function App() {
                     // Math calculations
                     const originalTotal = publicCart.reduce((sum, item) => sum + (item.variant.selling_price * item.quantity), 0);
                     const discountAmount = cartDiscountValid ? Math.round(originalTotal * (cartDiscountPercent / 100)) : 0;
-                    const shippingCost = (isEcom && hasShipping && checkoutDeliveryMethod === 'shipping') ? (config.shipping_cost || 0) : 0;
+                    const isFreeShippingApplied = cartDiscountValid && cartDiscountFreeShipping;
+                    const shippingCost = (isEcom && hasShipping && checkoutDeliveryMethod === 'shipping') ? (isFreeShippingApplied ? 0 : (config.shipping_cost || 0)) : 0;
                     const finalTotal = originalTotal - discountAmount + shippingCost;
 
                     return (
@@ -3226,7 +3348,7 @@ export default function App() {
                                 className={`btn btn-sm ${checkoutDeliveryMethod === 'shipping' ? 'btn-primary' : 'btn-secondary'}`}
                                 style={{ padding: 10, fontSize: '0.85rem' }}
                               >
-                                PostNord Frakt (+{config.shipping_cost} kr)
+                                PostNord Frakt ({isFreeShippingApplied ? 'Gratis' : `+${config.shipping_cost} kr`})
                               </button>
                             </div>
                           </div>
@@ -3275,7 +3397,7 @@ export default function App() {
                             {isEcom && hasShipping && checkoutDeliveryMethod === 'shipping' && (
                               <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
                                 <span>PostNord Hemleverans:</span>
-                                <span>+{config.shipping_cost} kr</span>
+                                <span>{isFreeShippingApplied ? '0 kr (Fri frakt)' : `+${config.shipping_cost} kr`}</span>
                               </div>
                             )}
 

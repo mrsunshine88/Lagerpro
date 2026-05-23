@@ -2572,6 +2572,62 @@ body {
     }
 }
 
+/* ==================== RESPONSIVE DISCOUNT TABLE SYSTEM ==================== */
+@media (max-width: 768px) {
+    .discount-table,
+    .discount-table thead,
+    .discount-table tbody,
+    .discount-table th,
+    .discount-table td,
+    .discount-table tr {
+        display: block !important;
+    }
+    
+    .discount-table thead {
+        display: none !important; /* Hide original headers */
+    }
+    
+    .discount-table tr {
+        background: rgba(255, 255, 255, 0.02) !important;
+        border: 1px solid var(--border-light) !important;
+        border-radius: var(--radius-md) !important;
+        margin-bottom: 15px !important;
+        padding: 14px !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
+    }
+    
+    .discount-table td {
+        border: none !important;
+        padding: 8px 0 !important;
+        text-align: left !important;
+        position: relative !important;
+    }
+    
+    .discount-table td:not(:last-child) {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+    }
+    
+    .discount-table td::before {
+        content: attr(data-label);
+        display: block;
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 700;
+        margin-bottom: 4px;
+        letter-spacing: 0.05em;
+    }
+    
+    .discount-table td[data-label="Åtgärder"] {
+        border-bottom: none !important;
+        padding-top: 10px !important;
+    }
+    
+    .discount-table td[data-label="Åtgärder"] div {
+        justify-content: flex-start !important;
+    }
+}
+
 
 
 
