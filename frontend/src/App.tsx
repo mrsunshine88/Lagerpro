@@ -76,6 +76,10 @@ interface Booking {
   purchase_price: number;
   product_name: string;
   product_category: string;
+  discount_code?: string;
+  discount_percent?: number;
+  original_selling_price?: number;
+  message?: string;
 }
 
 interface CartItem {
@@ -194,6 +198,11 @@ export default function App() {
   const [bookingFirstName, setBookingFirstName] = useState('');
   const [bookingLastName, setBookingLastName] = useState('');
   const [bookingPhone, setBookingPhone] = useState('');
+  const [bookingDiscountCode, setBookingDiscountCode] = useState('');
+  const [bookingMessage, setBookingMessage] = useState('');
+  const [bookingDiscountPercent, setBookingDiscountPercent] = useState(0);
+  const [bookingDiscountValid, setBookingDiscountValid] = useState(false);
+  const [bookingDiscountError, setBookingDiscountError] = useState('');
   const [bookingSuccessModalOpen, setBookingSuccessModalOpen] = useState(false);
 
   // Settings / Account Modal
@@ -207,6 +216,13 @@ export default function App() {
   const [settingInvestment, setSettingInvestment] = useState(0);
   const [settingDiscount, setSettingDiscount] = useState(0);
   const [newProjectName, setNewProjectName] = useState('');
+
+  // Discount Codes Admin Management
+  const [discountCodes, setDiscountCodes] = useState<any[]>([]);
+  const [newDiscountCode, setNewDiscountCode] = useState('');
+  const [newDiscountProject, setNewDiscountProject] = useState('Allmänt');
+  const [newDiscountPercent, setNewDiscountPercent] = useState(0);
+  const [editingDiscountId, setEditingDiscountId] = useState<number | null>(null);
 
   // Admin User Panel
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
@@ -267,9 +283,24 @@ export default function App() {
       if (userProfile.role === 'admin') {
         fetchAnalytics();
         fetchUsers();
+        fetchDiscountCodes();
       }
     }
   }, [token, userProfile]);
+
+  // Reset booking form when modal opens/closes
+  useEffect(() => {
+    if (!bookingModalOpen) {
+      setBookingFirstName('');
+      setBookingLastName('');
+      setBookingPhone('');
+      setBookingDiscountCode('');
+      setBookingMessage('');
+      setBookingDiscountPercent(0);
+      setBookingDiscountValid(false);
+      setBookingDiscountError('');
+    }
+  }, [bookingModalOpen]);
 
   // --- API CALLS ---
   const fetchProducts = async () => {
@@ -321,6 +352,15 @@ export default function App() {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/users`, getAxiosConfig());
       setUsersList(res.data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchDiscountCodes = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/discount-codes`, getAxiosConfig());
+      setDiscountCodes(res.data);
     } catch (e) {
       console.error(e);
     }
@@ -513,6 +553,83 @@ export default function App() {
     }
   };
 
+  // Booking Discount Realtime check
+  const checkBookingDiscountCode = async (code: string, category: string) => {
+    setBookingDiscountCode(code);
+    if (!code.trim()) {
+      setBookingDiscountValid(false);
+      setBookingDiscountPercent(0);
+      setBookingDiscountError('');
+      return;
+    }
+    try {
+      const res = await axios.get(
+        `${API_BASE_URL}/api/public/discount-codes/validate?code=${encodeURIComponent(code)}&category=${encodeURIComponent(category)}`
+      );
+      if (res.data.valid) {
+        setBookingDiscountValid(true);
+        setBookingDiscountPercent(res.data.discountPercent);
+        setBookingDiscountError('');
+      } else {
+        setBookingDiscountValid(false);
+        setBookingDiscountPercent(0);
+        setBookingDiscountError(res.data.project ? `Gäller endast kategori "${res.data.project}"` : 'Ogiltig rabattkod');
+      }
+    } catch (e) {
+      setBookingDiscountValid(false);
+      setBookingDiscountPercent(0);
+      setBookingDiscountError('Kunde inte verifiera koden.');
+    }
+  };
+
+  // Discount Codes Admin Management
+  const handleSaveDiscountCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDiscountCode.trim()) return;
+    try {
+      if (editingDiscountId) {
+        await axios.post(
+          `${API_BASE_URL}/api/discount-codes/${editingDiscountId}`,
+          {
+            code: newDiscountCode.trim(),
+            project: newDiscountProject,
+            discount_percent: newDiscountPercent
+          },
+          getAxiosConfig()
+        );
+        alert('Rabattkod uppdaterad!');
+      } else {
+        await axios.post(
+          `${API_BASE_URL}/api/discount-codes`,
+          {
+            code: newDiscountCode.trim(),
+            project: newDiscountProject,
+            discount_percent: newDiscountPercent
+          },
+          getAxiosConfig()
+        );
+        alert('Rabattkod skapad!');
+      }
+      setNewDiscountCode('');
+      setNewDiscountPercent(0);
+      setEditingDiscountId(null);
+      fetchDiscountCodes();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Kunde inte spara rabattkoden.');
+    }
+  };
+
+  const handleDeleteDiscountCode = async (id: number, code: string) => {
+    if (!confirm(`Är du säker på att du vill radera rabattkoden "${code}"?`)) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/api/discount-codes/${id}`, getAxiosConfig());
+      alert('Rabattkoden raderad.');
+      fetchDiscountCodes();
+    } catch (e) {
+      alert('Kunde inte radera rabattkod.');
+    }
+  };
+
   // Public Booking Submit
   const handlePublicBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -523,13 +640,20 @@ export default function App() {
         variant_id: selectedBookingVariant.id,
         first_name: bookingFirstName.trim(),
         last_name: bookingLastName.trim(),
-        phone: bookingPhone.trim()
+        phone: bookingPhone.trim(),
+        discount_code: bookingDiscountValid ? bookingDiscountCode.trim() : undefined,
+        message: bookingMessage.trim() || undefined
       });
       if (res.data.success) {
         setBookingModalOpen(false);
         setBookingFirstName('');
         setBookingLastName('');
         setBookingPhone('');
+        setBookingDiscountCode('');
+        setBookingMessage('');
+        setBookingDiscountPercent(0);
+        setBookingDiscountValid(false);
+        setBookingDiscountError('');
         setBookingSuccessModalOpen(true);
         fetchPublicProducts();
       }
@@ -1380,8 +1504,21 @@ export default function App() {
                             <td style={{ padding: '12px 15px' }}>
                               <strong>{b.product_name}</strong>
                               <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>St: {b.size} | Färg: {b.color || 'Uni'} | SKU: {b.sku}</span>
+                              {b.message && (
+                                <div style={{ marginTop: 6, padding: '4px 8px', background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.15)', borderRadius: 4, fontSize: '0.8rem', color: '#fbbf24', maxWidth: 280, whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                                  <strong>Meddelande:</strong> "{b.message}"
+                                </div>
+                              )}
                             </td>
-                            <td style={{ padding: '12px 15px' }}><strong>{b.selling_price} kr</strong></td>
+                            <td style={{ padding: '12px 15px' }}>
+                              <strong>{b.selling_price} kr</strong>
+                              {b.discount_code && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--color-success)', fontWeight: 600 }}>Kod: {b.discount_code} (-{b.discount_percent}%)</span>
+                                  <span style={{ fontSize: '0.7rem', textDecoration: 'line-through', color: 'var(--text-muted)' }}>Ord: {b.original_selling_price} kr</span>
+                                </div>
+                              )}
+                            </td>
                             <td style={{ padding: '12px 15px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{new Date(b.created_at).toLocaleString('sv-SE')}</td>
                             <td style={{ padding: '12px 15px' }}>
                               <span className={`status-badge status-${b.status}`}>
@@ -1683,9 +1820,74 @@ export default function App() {
                   <input type="text" value={bookingLastName} onChange={(e) => setBookingLastName(e.target.value)} required placeholder="Ditt efternamn..." style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
                 </div>
                 
-                <div className="input-container" style={{ marginBottom: 20 }}>
+                <div className="input-container" style={{ marginBottom: 12 }}>
                   <label>Telefonnummer *</label>
                   <input type="tel" value={bookingPhone} onChange={(e) => setBookingPhone(e.target.value)} required placeholder="T.ex. 070-123 45 67" style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 15 }}>
+                  <div className="input-container">
+                    <label>Rabattkod (Frivillig)</label>
+                    <input
+                      type="text"
+                      value={bookingDiscountCode}
+                      onChange={(e) => checkBookingDiscountCode(e.target.value, selectedBookingVariant.product_category)}
+                      placeholder="T.ex. LARS"
+                      style={{
+                        width: '100%',
+                        padding: 10,
+                        background: 'rgba(0,0,0,0.2)',
+                        border: bookingDiscountValid ? '1px solid var(--color-success)' : bookingDiscountError ? '1px solid var(--color-danger)' : '1px solid var(--border-light)',
+                        color: 'white',
+                        borderRadius: 4
+                      }}
+                    />
+                    {bookingDiscountValid && (
+                      <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-success)', marginTop: 4 }}>
+                        ✓ Kod aktiverad! Ger {bookingDiscountPercent}% rabatt.
+                      </span>
+                    )}
+                    {bookingDiscountError && (
+                      <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--color-danger)', marginTop: 4 }}>
+                        ✗ {bookingDiscountError}
+                      </span>
+                    )}
+                  </div>
+                  <div className="input-container">
+                    <label>Prisjustering</label>
+                    <div style={{ padding: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-light)', borderRadius: 4, height: 42, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      {bookingDiscountValid ? (
+                        <>
+                          <span style={{ textDecoration: 'line-through', fontSize: '0.85rem', color: 'var(--text-muted)' }}>{selectedBookingVariant.selling_price} kr</span>
+                          <strong style={{ color: 'var(--color-success)', fontSize: '1rem' }}>
+                            {Math.round(selectedBookingVariant.selling_price * (1.0 - bookingDiscountPercent / 100.0))} kr
+                          </strong>
+                        </>
+                      ) : (
+                        <strong>{selectedBookingVariant.selling_price} kr</strong>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="input-container" style={{ marginBottom: 20 }}>
+                  <label>Meddelande till butiken (Frivillig)</label>
+                  <textarea
+                    value={bookingMessage}
+                    onChange={(e) => setBookingMessage(e.target.value)}
+                    placeholder="T.ex. Önskemål eller när du planerar att hämta..."
+                    rows={3}
+                    style={{
+                      width: '100%',
+                      padding: 10,
+                      background: 'rgba(0,0,0,0.2)',
+                      border: '1px solid var(--border-light)',
+                      color: 'white',
+                      borderRadius: 4,
+                      resize: 'none',
+                      fontFamily: 'inherit'
+                    }}
+                  />
                 </div>
                 
                 <button type="submit" className="btn btn-primary btn-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
@@ -1979,7 +2181,7 @@ export default function App() {
                     </form>
                   </div>
 
-                  <div>
+                  <div style={{ borderBottom: '1px solid var(--border-light)', paddingBottom: 20, marginBottom: 20 }}>
                     <h3>Skapa / Ta bort projektkategorier</h3>
                     <div style={{ display: 'flex', gap: 10, marginBottom: 15 }}>
                       <input type="text" placeholder="Nytt projektnamn..." value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} style={{ flex: 1, padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
@@ -1993,6 +2195,128 @@ export default function App() {
                           <button onClick={() => handleDeleteProject(p)} style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: 0 }}><X style={{ width: 14, height: 14 }} /></button>
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3>Hantera Rabattkoder</h3>
+                    <form onSubmit={handleSaveDiscountCode} style={{ marginBottom: 15, background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', padding: 12, borderRadius: 6 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.2fr 0.8fr', gap: 10, marginBottom: 12 }}>
+                        <div className="input-container">
+                          <label style={{ fontSize: '0.75rem', marginBottom: 4 }}>Välj projekt/kategori</label>
+                          <select
+                            value={newDiscountProject}
+                            onChange={(e) => setNewDiscountProject(e.target.value)}
+                            className="custom-select"
+                            style={{ width: '100%', height: 38, fontSize: '0.85rem' }}
+                          >
+                            <option value="Alla">Alla projekt</option>
+                            <option value="Allmänt">Allmänt</option>
+                            <option value="Skor">Skor</option>
+                            <option value="Krukor">Krukor</option>
+                            <option value="Utemöbler">Utemöbler</option>
+                            {projectsList.map((p) => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="input-container">
+                          <label style={{ fontSize: '0.75rem', marginBottom: 4 }}>Rabattkod</label>
+                          <input
+                            type="text"
+                            placeholder="T.ex. LARS"
+                            value={newDiscountCode}
+                            onChange={(e) => setNewDiscountCode(e.target.value)}
+                            required
+                            style={{ width: '100%', padding: 8, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, height: 38 }}
+                          />
+                        </div>
+                        <div className="input-container">
+                          <label style={{ fontSize: '0.75rem', marginBottom: 4 }}>Rabatt (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            placeholder="20"
+                            value={newDiscountPercent}
+                            onChange={(e) => setNewDiscountPercent(parseFloat(e.target.value) || 0)}
+                            required
+                            style={{ width: '100%', padding: 8, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, height: 38 }}
+                          />
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button type="submit" className="btn btn-primary btn-sm" style={{ flex: 1 }}>
+                          {editingDiscountId ? 'Spara ändringar' : 'Skapa rabattkod'}
+                        </button>
+                        {editingDiscountId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingDiscountId(null);
+                              setNewDiscountCode('');
+                              setNewDiscountPercent(0);
+                            }}
+                            className="btn btn-ghost btn-sm"
+                          >
+                            Avbryt
+                          </button>
+                        )}
+                      </div>
+                    </form>
+
+                    <h4 style={{ marginBottom: 8, fontSize: '0.85rem' }}>Aktiva rabattkoder</h4>
+                    <div style={{ border: '1px solid var(--border-light)', borderRadius: 4, overflow: 'hidden', background: 'rgba(0,0,0,0.1)' }}>
+                      <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border-light)' }}>
+                            <th style={{ padding: '6px 10px' }}>Kod</th>
+                            <th style={{ padding: '6px 10px' }}>Projekt</th>
+                            <th style={{ padding: '6px 10px' }}>Rabatt</th>
+                            <th style={{ padding: '6px 10px', textAlign: 'right' }}>Åtgärder</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {discountCodes.map((dc) => (
+                            <tr key={dc.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                              <td style={{ padding: '6px 10px' }}><strong>{dc.code}</strong></td>
+                              <td style={{ padding: '6px 10px' }}><span className="category-tag" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>{dc.project}</span></td>
+                              <td style={{ padding: '6px 10px' }}><strong style={{ color: 'var(--color-success)' }}>-{dc.discountPercent}%</strong></td>
+                              <td style={{ padding: '6px 10px', textAlign: 'right' }}>
+                                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                  <button
+                                    onClick={() => {
+                                      setEditingDiscountId(dc.id);
+                                      setNewDiscountCode(dc.code);
+                                      setNewDiscountProject(dc.project);
+                                      setNewDiscountPercent(dc.discountPercent);
+                                    }}
+                                    className="btn btn-ghost btn-icon btn-xs"
+                                    title="Redigera"
+                                  >
+                                    <Edit style={{ width: 12, height: 12 }} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteDiscountCode(dc.id, dc.code)}
+                                    className="btn btn-ghost btn-icon btn-xs"
+                                    style={{ color: 'var(--color-danger)' }}
+                                    title="Radera"
+                                  >
+                                    <Trash2 style={{ width: 12, height: 12 }} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                          {discountCodes.length === 0 && (
+                            <tr>
+                              <td colSpan={4} style={{ textAlign: 'center', padding: 15, color: 'var(--text-muted)' }}>
+                                Inga rabattkoder skapade än.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </>

@@ -6,6 +6,7 @@ import { Product } from '../entities/product.entity.js';
 import { Variant } from '../entities/variant.entity.js';
 import { Transaction } from '../entities/transaction.entity.js';
 import { Booking } from '../entities/booking.entity.js';
+import { DiscountCode } from '../entities/discount-code.entity.js';
 import { AuthService } from '../auth/auth.service.js';
 
 @Injectable()
@@ -17,6 +18,8 @@ export class SettingsService {
     private readonly productRepository: EntityRepository<Product>,
     @InjectRepository(Variant)
     private readonly variantRepository: EntityRepository<Variant>,
+    @InjectRepository(DiscountCode)
+    private readonly discountCodeRepository: EntityRepository<DiscountCode>,
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
     private readonly em: EntityManager,
@@ -147,5 +150,93 @@ export class SettingsService {
 
     // Remove this project from user allowed lists
     await this.authService.removeAllowedProjectFromAll(name);
+  }
+
+  async getDiscountCodes(): Promise<DiscountCode[]> {
+    return this.discountCodeRepository.find({}, { orderBy: { code: 'ASC' } });
+  }
+
+  async createDiscountCode(data: { code: string; project: string; discountPercent: number }): Promise<DiscountCode> {
+    const code = data.code.trim().toUpperCase();
+    const project = data.project.trim();
+    const percent = data.discountPercent;
+
+    if (!code) {
+      throw new BadRequestException('Rabattkod kan inte vara tom.');
+    }
+    if (percent < 0 || percent > 100) {
+      throw new BadRequestException('Rabatt i procent måste vara mellan 0 och 100.');
+    }
+
+    const exists = await this.discountCodeRepository.findOne({ code });
+    if (exists) {
+      throw new BadRequestException(`Rabattkoden ${code} finns redan.`);
+    }
+
+    const dc = new DiscountCode();
+    dc.code = code;
+    dc.project = project;
+    dc.discountPercent = percent;
+
+    this.em.persist(dc);
+    await this.em.flush();
+    return dc;
+  }
+
+  async updateDiscountCode(id: number, data: { code: string; project: string; discountPercent: number }): Promise<DiscountCode> {
+    const code = data.code.trim().toUpperCase();
+    const project = data.project.trim();
+    const percent = data.discountPercent;
+
+    if (!code) {
+      throw new BadRequestException('Rabattkod kan inte vara tom.');
+    }
+    if (percent < 0 || percent > 100) {
+      throw new BadRequestException('Rabatt i procent måste vara mellan 0 och 100.');
+    }
+
+    const dc = await this.discountCodeRepository.findOne(id);
+    if (!dc) {
+      throw new NotFoundException('Rabattkoden hittades inte.');
+    }
+
+    const exists = await this.discountCodeRepository.findOne({ code });
+    if (exists && exists.id !== id) {
+      throw new BadRequestException(`Rabattkoden ${code} används redan på en annan kod.`);
+    }
+
+    dc.code = code;
+    dc.project = project;
+    dc.discountPercent = percent;
+
+    await this.em.flush();
+    return dc;
+  }
+
+  async deleteDiscountCode(id: number): Promise<void> {
+    const dc = await this.discountCodeRepository.findOne(id);
+    if (!dc) {
+      throw new NotFoundException('Rabattkoden hittades inte.');
+    }
+    this.em.remove(dc);
+    await this.em.flush();
+  }
+
+  async validateDiscountCode(code: string, productCategory?: string): Promise<{ valid: boolean; discountPercent: number; project: string }> {
+    const cleanCode = code.trim().toUpperCase();
+    const dc = await this.discountCodeRepository.findOne({ code: cleanCode });
+    if (!dc) {
+      return { valid: false, discountPercent: 0, project: '' };
+    }
+
+    if (productCategory) {
+      const matchProject = dc.project.toLowerCase();
+      const cat = productCategory.toLowerCase();
+      if (matchProject !== 'alla' && matchProject !== 'allmänt' && matchProject !== 'all' && matchProject !== cat) {
+        return { valid: false, discountPercent: 0, project: dc.project };
+      }
+    }
+
+    return { valid: true, discountPercent: dc.discountPercent, project: dc.project };
   }
 }

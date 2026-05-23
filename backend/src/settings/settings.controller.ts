@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Query, Req, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Query, Req, UseGuards, HttpCode, HttpStatus, Param, ParseIntPipe } from '@nestjs/common';
 import { SettingsService } from './settings.service.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { RolesGuard } from '../auth/roles.guard.js';
@@ -81,5 +81,61 @@ export class SettingsController {
     const name = (body.name || '').trim();
     await this.settingsService.deleteProject(name);
     return { success: true, message: `Projektet '${name}' har raderats.` };
+  }
+
+  @Get('public/discount-codes/validate')
+  async validateCode(
+    @Query('code') code: string,
+    @Query('category') category?: string,
+  ) {
+    if (!code) {
+      return { valid: false, discountPercent: 0, project: '' };
+    }
+    return this.settingsService.validateDiscountCode(code, category);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Get('discount-codes')
+  async getDiscountCodes() {
+    return this.settingsService.getDiscountCodes();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('discount-codes')
+  @HttpCode(HttpStatus.OK)
+  async createDiscountCode(
+    @Body() body: { code: string; project: string; discount_percent: number },
+  ) {
+    return this.settingsService.createDiscountCode({
+      code: body.code,
+      project: body.project,
+      discountPercent: parseFloat(body.discount_percent as any || 0.0),
+    });
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('discount-codes/:id')
+  @HttpCode(HttpStatus.OK)
+  async updateDiscountCode(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { code: string; project: string; discount_percent: number },
+  ) {
+    return this.settingsService.updateDiscountCode(id, {
+      code: body.code,
+      project: body.project,
+      discountPercent: parseFloat(body.discount_percent as any || 0.0),
+    });
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Delete('discount-codes/:id')
+  @HttpCode(HttpStatus.OK)
+  async deleteDiscountCode(@Param('id', ParseIntPipe) id: number) {
+    await this.settingsService.deleteDiscountCode(id);
+    return { success: true };
   }
 }
