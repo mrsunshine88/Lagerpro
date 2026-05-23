@@ -44,6 +44,7 @@ export class BookingsController {
       delivery_method: string;
       shipping_address?: string;
       shipping_cost: number;
+      payment_status?: string;
     },
   ) {
     const bookings = await this.bookingsService.createBatchBookings({
@@ -56,6 +57,7 @@ export class BookingsController {
       deliveryMethod: body.delivery_method,
       shippingAddress: body.shipping_address,
       shippingCost: body.shipping_cost,
+      paymentStatus: body.payment_status,
     });
     return {
       success: true,

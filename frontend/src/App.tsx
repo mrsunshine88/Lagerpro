@@ -775,7 +775,8 @@ export default function App() {
         message: checkoutMessage.trim() || undefined,
         delivery_method: isShipping ? 'shipping' : 'pickup',
         shipping_address: isShipping ? checkoutShippingAddress.trim() : undefined,
-        shipping_cost: shippingCost
+        shipping_cost: shippingCost,
+        payment_status: isEcom ? 'swish_pending' : 'store_payment'
       });
 
       if (res.data.success && res.data.booking_ids) {
@@ -2958,9 +2959,9 @@ export default function App() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         {purchasedItems.map((item, idx) => (
                           <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 4 }}>
-                            <div>
-                              <span>{item.product_name}</span>
-                              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            <div style={{ flex: 1, marginRight: 12 }}>
+                              <span style={{ display: 'block', wordBreak: 'break-word', whiteSpace: 'normal' }}>{item.product_name}</span>
+                              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2 }}>
                                 Storlek: {item.variant.size} | Färg: {item.variant.color || 'Uni'}
                               </span>
                             </div>
@@ -3117,9 +3118,9 @@ export default function App() {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                             {publicCart.map((item) => (
                               <div key={item.variant.id} className="glass-panel" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 15px', background: 'rgba(255,255,255,0.02)' }}>
-                                <div>
-                                  <strong style={{ display: 'block', fontSize: '0.95rem' }}>{item.product_name}</strong>
-                                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                <div style={{ flex: 1, marginRight: 12 }}>
+                                  <strong style={{ display: 'block', fontSize: '0.95rem', wordBreak: 'break-word', whiteSpace: 'normal' }}>{item.product_name}</strong>
+                                  <span style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 2 }}>
                                     Storlek: {item.variant.size} | Färg: {item.variant.color || 'Uni'}
                                   </span>
                                 </div>

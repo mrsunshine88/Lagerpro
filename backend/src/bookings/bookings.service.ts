@@ -80,6 +80,7 @@ export class BookingsService {
   }
 
   async findAllBookings(): Promise<Booking[]> {
+    await this.releaseExpiredBookings(this.em);
     return this.bookingRepository.find(
       {},
       {
@@ -156,6 +157,26 @@ export class BookingsService {
     });
   }
 
+  async releaseExpiredBookings(em: EntityManager): Promise<void> {
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+    const expiredBookings = await em.find(Booking, {
+      paymentStatus: 'swish_pending',
+      status: 'pending',
+      createdAt: { $lt: fifteenMinutesAgo }
+    }, { populate: ['variant'] });
+
+    if (expiredBookings.length > 0) {
+      console.log(`[RESERVATION] Hittade ${expiredBookings.length} utgångna Swish-reservationer. Frisläpper saldo...`);
+      for (const booking of expiredBookings) {
+        booking.status = 'cancelled';
+        booking.paymentStatus = 'expired';
+        booking.variant.stock += 1;
+        console.log(`  - Frisläppte 1 par av ${booking.variant.sku} (Bokning #${booking.id})`);
+      }
+      await em.flush();
+    }
+  }
+
   async createBatchBookings(data: {
     items: { variantId: number }[];
     firstName: string;
@@ -166,13 +187,15 @@ export class BookingsService {
     deliveryMethod: string;
     shippingAddress?: string;
     shippingCost: number;
+    paymentStatus?: string;
   }): Promise<Booking[]> {
-    const { items, firstName, lastName, phone, discountCode, message, deliveryMethod, shippingAddress, shippingCost } = data;
+    const { items, firstName, lastName, phone, discountCode, message, deliveryMethod, shippingAddress, shippingCost, paymentStatus } = data;
     if (!items || items.length === 0 || !firstName || !lastName || !phone) {
       throw new BadRequestException('Alla obligatoriska fält måste fyllas i.');
     }
 
     return this.em.transactional(async (em) => {
+      await this.releaseExpiredBookings(em);
       const createdBookings: Booking[] = [];
 
       for (const item of items) {
@@ -214,7 +237,7 @@ export class BookingsService {
         booking.discountCode = appliedCode;
         booking.discountPercent = discountPercent;
         booking.message = message ? message.trim() : undefined;
-        booking.paymentStatus = 'pending';
+        booking.paymentStatus = paymentStatus || 'pending';
         booking.deliveryMethod = deliveryMethod || 'pickup';
         booking.shippingAddress = shippingAddress ? shippingAddress.trim() : undefined;
         booking.shippingCost = shippingCost || 0.0;
