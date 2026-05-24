@@ -862,7 +862,7 @@ function renderAnalytics(data) {
     if (data.recent_sales.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" style="text-align:center; color: var(--text-muted); padding:30px;">
+                <td colspan="10" style="text-align:center; color: var(--text-muted); padding:30px;">
                     Inga försäljningar registrerade än. Minska lagersaldot på en produkt för att skapa en försäljning!
                 </td>
             </tr>
@@ -893,12 +893,45 @@ function renderAnalytics(data) {
             <td style="font-weight:600;">${formatMoney(sale.selling_price)}</td>
             <td class="val-success" style="font-weight:600;">+${formatMoney(profit)}</td>
             <td><span class="badge" style="font-size:0.75rem;">${margin.toFixed(0)}%</span></td>
+            <td style="text-align:right;">
+                <button onclick="undoSale(${sale.id}, '${sale.model_name.replace(/'/g, "\\'")}', ${sale.quantity})" class="btn btn-ghost btn-xs" style="color:var(--color-danger); border:1px solid rgba(239, 68, 68, 0.25); padding:2px 8px; border-radius:4px; cursor:pointer;">
+                    Ångra köp
+                </button>
+            </td>
         `;
         tbody.appendChild(row);
     });
     
     if (typeof lucide !== 'undefined') {
         lucide.createIcons();
+    }
+}
+
+// UNDO SALE / DELETE TRANSACTION
+async function undoSale(transactionId, modelName, quantity) {
+    const confirmed = await showConfirm({
+        title: 'Ångra försäljning',
+        msg: `Är du säker på att du vill ångra denna försäljning för ${modelName}? Skorna (+${quantity} st) återförs till lagret och försäljningsstatistiken justeras.`,
+        type: 'danger',
+        okLabel: 'Ja, ångra köp'
+    });
+    if (!confirmed) return;
+    
+    try {
+        const response = await fetch(`/api/transactions/${transactionId}`, {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+        if (data.success) {
+            showToast("Försäljningen har raderats och skorna återförts till lagret.", 'success');
+            loadAnalytics();
+            loadInventory();
+        } else {
+            showToast("Kunde inte ångra köpet: " + data.error, 'error');
+        }
+    } catch (e) {
+        console.error("Fel vid ångra köp:", e);
+        showToast("Ett fel uppstod.", 'error');
     }
 }
 

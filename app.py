@@ -420,6 +420,12 @@ def add_product():
         
     with get_db() as conn:
         cursor = conn.cursor()
+        
+        # Get active project discount
+        cursor.execute("SELECT value FROM settings WHERE key = ?", (f"discount_{category}",))
+        discount_row = cursor.fetchone()
+        discount = float(discount_row[0]) if discount_row and discount_row[0] else 0.0
+
         cursor.execute(
             "INSERT INTO products (name, category, description) VALUES (?, ?, ?)",
             (name, category, description)
@@ -431,8 +437,12 @@ def add_product():
             color = v.get('color', '')
             stock = int(v.get('stock', 0))
             p_price = float(v.get('purchase_price', 0.0))
-            s_price = float(v.get('selling_price', 0.0))
             orig_price = float(v.get('original_price') or v.get('selling_price') or 0.0)
+            
+            if discount > 0 and orig_price > 0:
+                s_price = round(orig_price * (1.0 - discount / 100.0), 0)
+            else:
+                s_price = float(v.get('selling_price', 0.0))
             
             sku = v.get('sku')
             if not sku:
@@ -488,16 +498,9 @@ def update_stock(variant_id):
         cursor.execute("UPDATE variants SET stock = ? WHERE id = ?", (new_stock, variant_id))
         
         # Log Transaction
-        if change < 0:
-            # Sales transaction
+        if change != 0:
             cursor.execute(
-                "INSERT INTO transactions (variant_id, type, quantity, purchase_price, selling_price) VALUES (?, 'sale', ?, ?, ?)",
-                (variant_id, abs(change), variant['purchase_price'], variant['selling_price'])
-            )
-        elif change > 0:
-            # Restock / Purchase transaction
-            cursor.execute(
-                "INSERT INTO transactions (variant_id, type, quantity, purchase_price, selling_price) VALUES (?, 'purchase', ?, ?, ?)",
+                "INSERT INTO transactions (variant_id, type, quantity, purchase_price, selling_price) VALUES (?, 'adjustment', ?, ?, ?)",
                 (variant_id, change, variant['purchase_price'], variant['selling_price'])
             )
             
@@ -558,13 +561,34 @@ def edit_variant_details(variant_id):
         
     data = request.json or {}
     purchase_price = float(data.get('purchase_price', 0.0))
-    selling_price = float(data.get('selling_price', 0.0))
     original_price = float(data.get('original_price') or data.get('selling_price') or 0.0)
     size = data.get('size', '').strip()
     color = data.get('color', '').strip()
     
     with get_db() as conn:
-        conn.execute(
+        cursor = conn.cursor()
+        
+        # Get category of product this variant belongs to
+        cursor.execute("""
+            SELECT p.category 
+            FROM products p 
+            JOIN variants v ON v.product_id = p.id 
+            WHERE v.id = ?
+        """, (variant_id,))
+        row = cursor.fetchone()
+        category = row[0] if row else 'Skor'
+        
+        # Get active project discount
+        cursor.execute("SELECT value FROM settings WHERE key = ?", (f"discount_{category}",))
+        discount_row = cursor.fetchone()
+        discount = float(discount_row[0]) if discount_row and discount_row[0] else 0.0
+        
+        if discount > 0 and original_price > 0:
+            selling_price = round(original_price * (1.0 - discount / 100.0), 0)
+        else:
+            selling_price = float(data.get('selling_price', 0.0))
+            
+        cursor.execute(
             '''
             UPDATE variants 
             SET purchase_price = ?, selling_price = ?, original_price = ?, size = ?, color = ?
@@ -584,6 +608,42 @@ def delete_variant(variant_id):
     with get_db() as conn:
         conn.execute("DELETE FROM variants WHERE id = ?", (variant_id,))
         conn.commit()
+    return jsonify({"success": True})
+
+@app.route('/api/transactions/<int:transaction_id>', methods=['DELETE'])
+def delete_transaction(transaction_id):
+    if not check_auth():
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    with get_db() as conn:
+        cursor = conn.cursor()
+        
+        # Get transaction details
+        transaction = cursor.execute("SELECT * FROM transactions WHERE id = ?", (transaction_id,)).fetchone()
+        if not transaction:
+            return jsonify({"error": "Transaktionen hittades inte"}), 404
+            
+        t_type = transaction['type']
+        qty = transaction['quantity']
+        var_id = transaction['variant_id']
+        
+        # Revert stock of the variant
+        variant = cursor.execute("SELECT * FROM variants WHERE id = ?", (var_id,)).fetchone()
+        if variant:
+            if t_type == 'sale':
+                new_stock = variant['stock'] + qty
+            elif t_type == 'purchase':
+                new_stock = max(0, variant['stock'] - qty)
+            elif t_type == 'adjustment':
+                new_stock = max(0, variant['stock'] - qty)
+            else:
+                new_stock = variant['stock']
+                
+            cursor.execute("UPDATE variants SET stock = ? WHERE id = ?", (new_stock, var_id))
+            
+        cursor.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
+        conn.commit()
+        
     return jsonify({"success": True})
 
 @app.route('/api/products/<int:product_id>', methods=['DELETE'])
@@ -614,6 +674,11 @@ def edit_product_api(product_id):
     with get_db() as conn:
         cursor = conn.cursor()
         
+        # Get active project discount
+        cursor.execute("SELECT value FROM settings WHERE key = ?", (f"discount_{category}",))
+        discount_row = cursor.fetchone()
+        discount = float(discount_row[0]) if discount_row and discount_row[0] else 0.0
+
         # Check if product exists
         product = cursor.execute("SELECT * FROM products WHERE id = ?", (product_id,)).fetchone()
         if not product:
@@ -636,8 +701,13 @@ def edit_product_api(product_id):
             color = v.get('color', '')
             stock = int(v.get('stock', 0))
             p_price = float(v.get('purchase_price', 0.0))
-            s_price = float(v.get('selling_price', 0.0))
             orig_price = float(v.get('original_price') or v.get('selling_price') or 0.0)
+            
+            if discount > 0 and orig_price > 0:
+                s_price = round(orig_price * (1.0 - discount / 100.0), 0)
+            else:
+                s_price = float(v.get('selling_price', 0.0))
+                
             sku = v.get('sku')
             
             if not sku:

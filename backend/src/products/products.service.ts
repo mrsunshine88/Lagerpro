@@ -4,6 +4,7 @@ import { EntityRepository, EntityManager } from '@mikro-orm/postgresql';
 import { Product } from '../entities/product.entity.js';
 import { Variant } from '../entities/variant.entity.js';
 import { Transaction } from '../entities/transaction.entity.js';
+import { Setting } from '../entities/setting.entity.js';
 
 @Injectable()
 export class ProductsService {
@@ -76,6 +77,10 @@ export class ProductsService {
 
       em.persist(product);
 
+      const key = `discount_${product.category}`;
+      const setting = await em.findOne(Setting, { key });
+      const discount = setting && setting.value ? parseFloat(setting.value) : 0.0;
+
       const variantsData = data.variants || [];
       for (const v of variantsData) {
         const variant = new Variant();
@@ -84,8 +89,13 @@ export class ProductsService {
         variant.color = v.color || '';
         variant.stock = parseInt(v.stock) || 0;
         variant.purchasePrice = parseFloat(v.purchasePrice) || 0.0;
-        variant.sellingPrice = parseFloat(v.sellingPrice) || 0.0;
-        variant.originalPrice = parseFloat(v.originalPrice) || variant.sellingPrice || 0.0;
+        variant.originalPrice = parseFloat(v.originalPrice) || parseFloat(v.sellingPrice) || 0.0;
+
+        if (discount > 0 && variant.originalPrice > 0) {
+          variant.sellingPrice = Math.round(variant.originalPrice * (1.0 - discount / 100.0));
+        } else {
+          variant.sellingPrice = parseFloat(v.sellingPrice) || 0.0;
+        }
 
         // Generate SKU if not provided
         if (v.sku) {
@@ -140,6 +150,10 @@ export class ProductsService {
       product.category = data.category || 'Skor';
       product.description = data.description || '';
 
+      const key = `discount_${product.category}`;
+      const setting = await em.findOne(Setting, { key });
+      const discount = setting && setting.value ? parseFloat(setting.value) : 0.0;
+
       const existingVariants = product.variants.getItems();
       const existingIds = existingVariants.map((ev) => ev.id);
       const processedIds = new Set<number>();
@@ -148,9 +162,13 @@ export class ProductsService {
       for (const v of variantsData) {
         const vId = parseInt(v.id);
         const purchasePrice = parseFloat(v.purchasePrice) || 0.0;
-        const sellingPrice = parseFloat(v.sellingPrice) || 0.0;
-        const originalPrice = parseFloat(v.originalPrice) || sellingPrice || 0.0;
+        const originalPrice = parseFloat(v.originalPrice) || parseFloat(v.sellingPrice) || 0.0;
         const stock = parseInt(v.stock) || 0;
+        
+        let sellingPrice = parseFloat(v.sellingPrice) || 0.0;
+        if (discount > 0 && originalPrice > 0) {
+          sellingPrice = Math.round(originalPrice * (1.0 - discount / 100.0));
+        }
 
         if (vId && existingIds.includes(vId)) {
           // Update existing variant
@@ -254,8 +272,8 @@ export class ProductsService {
       if (change !== 0) {
         const transaction = new Transaction();
         transaction.variant = variant;
-        transaction.type = change < 0 ? 'sale' : 'purchase';
-        transaction.quantity = Math.abs(change);
+        transaction.type = 'adjustment';
+        transaction.quantity = change;
         transaction.purchasePrice = variant.purchasePrice;
         transaction.sellingPrice = variant.sellingPrice;
         em.persist(transaction);
@@ -275,14 +293,24 @@ export class ProductsService {
       color: string;
     },
   ): Promise<void> {
-    const variant = await this.variantRepository.findOne(id);
+    const variant = await this.variantRepository.findOne(id, { populate: ['product'] });
     if (!variant) {
       throw new NotFoundException('Varianten hittades inte');
     }
 
+    const category = variant.product.category;
+    const setting = await this.variantRepository.getEntityManager().findOne(Setting, { key: `discount_${category}` });
+    const discount = setting && setting.value ? parseFloat(setting.value) : 0.0;
+
     variant.purchasePrice = data.purchasePrice;
-    variant.sellingPrice = data.sellingPrice;
     variant.originalPrice = data.originalPrice || data.sellingPrice || 0.0;
+
+    if (discount > 0 && variant.originalPrice > 0) {
+      variant.sellingPrice = Math.round(variant.originalPrice * (1.0 - discount / 100.0));
+    } else {
+      variant.sellingPrice = data.sellingPrice;
+    }
+
     variant.size = data.size.trim();
     variant.color = data.color.trim();
 

@@ -11,7 +11,24 @@ export class ProductsController {
   @UseGuards(JwtAuthGuard)
   @Get('products')
   async getProducts(@Req() req: any) {
-    return this.productsService.findAll(req.user.role, req.user.allowedProjects);
+    const products = await this.productsService.findAll(req.user.role, req.user.allowedProjects);
+    return products.map((p) => ({
+      id: p.id,
+      name: p.name,
+      category: p.category,
+      description: p.description,
+      createdAt: p.createdAt,
+      variants: p.variants.getItems().map((v) => ({
+        id: v.id,
+        size: v.size,
+        color: v.color,
+        stock: v.stock,
+        purchase_price: v.purchasePrice,
+        selling_price: v.sellingPrice,
+        original_price: v.originalPrice,
+        sku: v.sku,
+      })),
+    }));
   }
 
   @Get('public/products')

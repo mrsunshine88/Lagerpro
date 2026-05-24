@@ -16,6 +16,11 @@ async function bootstrap() {
     console.log('[DATABASE] Kontrollerar databas och schema...');
     await generator.ensureDatabase();
     await generator.update();
+    
+    // Garantera att settings-tabellen existerar i Postgres (mikro-orm cache-gard)
+    const connection = orm.em.getConnection();
+    await connection.execute('CREATE TABLE IF NOT EXISTS settings (key VARCHAR(255) PRIMARY KEY, value TEXT NULL);');
+
     console.log('[DATABASE] Databasschema är uppdaterat!');
 
     // Seeda standard admin-användare om tabellen är tom eller användaren saknas

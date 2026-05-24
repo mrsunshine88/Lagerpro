@@ -68,4 +68,26 @@ export class TransactionsService {
       }
     });
   }
+
+  async deleteTransaction(id: number): Promise<void> {
+    await this.em.transactional(async (em) => {
+      const transaction = await em.findOne(Transaction, id, { populate: ['variant'] });
+      if (!transaction) {
+        throw new NotFoundException('Transaktionen hittades inte');
+      }
+
+      const variant = transaction.variant;
+      if (variant) {
+        if (transaction.type === 'sale') {
+          variant.stock += transaction.quantity;
+        } else if (transaction.type === 'purchase') {
+          variant.stock = Math.max(0, variant.stock - transaction.quantity);
+        } else if (transaction.type === 'adjustment') {
+          variant.stock = Math.max(0, variant.stock - transaction.quantity);
+        }
+      }
+
+      em.remove(transaction);
+    });
+  }
 }
