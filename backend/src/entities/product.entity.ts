@@ -16,6 +16,9 @@ export class Product {
   @Property({ nullable: true })
   description?: string;
 
+  @Property({ nullable: true })
+  imageUrl?: string;
+
   @Property({ defaultRaw: 'CURRENT_TIMESTAMP' })
   createdAt = new Date();
 

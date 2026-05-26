@@ -115,6 +115,7 @@ export default function App() {
   const [paypalWebhookId, setPaypalWebhookId] = useState('');
   const [paypalMode, setPaypalMode] = useState('sandbox');
   const [paypalHasSecret, setPaypalHasSecret] = useState(false);
+  const [paypalCategoryFilter, setPaypalCategoryFilter] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [settingsActiveTab, setSettingsActiveTab] = useState<'profile' | 'projects' | 'discount_codes' | 'swish' | 'paypal'>('profile');
 
@@ -507,6 +508,7 @@ export default function App() {
           client_secret: paypalClientSecret.trim(),
           webhook_id: paypalWebhookId.trim(),
           mode: paypalMode,
+          category_filter: paypalCategoryFilter.trim(),
         },
         getAxiosConfig(),
       );
@@ -716,6 +718,7 @@ export default function App() {
             setPaypalClientId(res.data.client_id || '');
             setPaypalWebhookId(res.data.webhook_id || '');
             setPaypalMode(res.data.mode || 'sandbox');
+            setPaypalCategoryFilter(res.data.category_filter || '');
             setPaypalHasSecret(res.data.has_secret);
           })
           .catch(() => {});
@@ -1161,6 +1164,17 @@ export default function App() {
                             placeholder="Klistra in ditt PayPal Webhook ID..."
                             value={paypalWebhookId}
                             onChange={(e) => setPaypalWebhookId(e.target.value)}
+                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                        </div>
+
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label>PayPal Kategorifilter (t.ex. FOOTWEAR, SHOES eller tomt för alla)</label>
+                          <input
+                            type="text"
+                            placeholder="T.ex. FOOTWEAR..."
+                            value={paypalCategoryFilter}
+                            onChange={(e) => setPaypalCategoryFilter(e.target.value)}
                             style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
                           />
                         </div>

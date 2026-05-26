@@ -21,29 +21,32 @@ export class PaypalService {
   /**
    * Reads stored PayPal credentials from the database.
    */
-  private async getCredentials(): Promise<{ client_id: string; client_secret: string; webhook_id: string; mode: string }> {
+  private async getCredentials(): Promise<{ client_id: string; client_secret: string; webhook_id: string; mode: string; category_filter: string }> {
     const clientIdSetting = await this.em.findOne(Setting, { key: 'paypal_client_id' });
     const secretSetting = await this.em.findOne(Setting, { key: 'paypal_client_secret' });
     const webhookIdSetting = await this.em.findOne(Setting, { key: 'paypal_webhook_id' });
     const modeSetting = await this.em.findOne(Setting, { key: 'paypal_mode' });
+    const categoryFilterSetting = await this.em.findOne(Setting, { key: 'paypal_category_filter' });
 
     return {
       client_id: clientIdSetting?.value || '',
       client_secret: secretSetting?.value || '',
       webhook_id: webhookIdSetting?.value || '',
       mode: modeSetting?.value || 'sandbox',
+      category_filter: categoryFilterSetting?.value || '',
     };
   }
 
   /**
    * Public retrieval of configuration for the Admin UI (omits secret for security).
    */
-  async getPaypalConfig(): Promise<{ client_id: string; webhook_id: string; mode: string; has_secret: boolean }> {
+  async getPaypalConfig(): Promise<{ client_id: string; webhook_id: string; mode: string; category_filter: string; has_secret: boolean }> {
     const creds = await this.getCredentials();
     return {
       client_id: creds.client_id,
       webhook_id: creds.webhook_id,
       mode: creds.mode,
+      category_filter: creds.category_filter,
       has_secret: !!creds.client_secret.trim(),
     };
   }
@@ -51,7 +54,7 @@ export class PaypalService {
   /**
    * Saves PayPal configuration to the settings table in the database.
    */
-  async setPaypalConfig(config: { client_id: string; client_secret: string; webhook_id: string; mode: string }): Promise<void> {
+  async setPaypalConfig(config: { client_id: string; client_secret: string; webhook_id: string; mode: string; category_filter?: string }): Promise<void> {
     await this.em.transactional(async (em) => {
       // client_id
       let clientIdSetting = await em.findOne(Setting, { key: 'paypal_client_id' });
@@ -90,6 +93,17 @@ export class PaypalService {
         em.persist(modeSetting);
       }
       modeSetting.value = config.mode || 'sandbox';
+
+      // category_filter
+      if (config.category_filter !== undefined) {
+        let categoryFilterSetting = await em.findOne(Setting, { key: 'paypal_category_filter' });
+        if (!categoryFilterSetting) {
+          categoryFilterSetting = new Setting();
+          categoryFilterSetting.key = 'paypal_category_filter';
+          em.persist(categoryFilterSetting);
+        }
+        categoryFilterSetting.value = config.category_filter.trim();
+      }
     });
   }
 
@@ -312,9 +326,6 @@ export class PaypalService {
     }
   }
 
-  /**
-   * Connects to PayPal catalog API, downloads products, and imports them into Lagerpro.
-   */
   async syncPaypalCatalog(): Promise<number> {
     const creds = await this.getCredentials();
     if (!creds.client_id || !creds.client_secret) {
@@ -346,9 +357,25 @@ export class PaypalService {
     return this.em.transactional(async (em) => {
       let importedCount = 0;
 
+      // Prepare category filtering tokens
+      const categoryFilter = creds.category_filter || '';
+      const allowedCategories = categoryFilter.trim()
+        ? categoryFilter.toLowerCase().split(',').map(s => s.trim())
+        : [];
+
       for (const p of paypalProducts) {
         const name = p.name;
         if (!name) continue;
+
+        // Apply Category Filtering
+        if (allowedCategories.length > 0) {
+          const prodCategory = (p.category || '').toLowerCase();
+          const matches = allowedCategories.some(cat => prodCategory.includes(cat) || cat.includes(prodCategory));
+          if (!matches) {
+            this.logger.log(`[SYNKERING] Ignorerar '${name}' p.g.a. kategori '${p.category}' (filtrerad).`);
+            continue;
+          }
+        }
 
         // Parse name: t.ex. "Danny brun 42" -> Model: Danny, Color: brun, Size: 42
         const parsed = this.parseShoeName(name);
@@ -360,12 +387,19 @@ export class PaypalService {
           product.name = parsed.model;
           product.category = 'Skor';
           product.description = p.description || 'Importerad från PayPal-katalog.';
+          product.imageUrl = p.image_url || undefined;
           em.persist(product);
+        } else {
+          // Update details & imageUrl if changed
+          product.description = p.description || product.description;
+          if (p.image_url) {
+            product.imageUrl = p.image_url;
+          }
         }
 
         // We use PayPal's Product ID as the unique SKU!
         const sku = p.id;
-        let variant = await em.findOne(Variant, { sku });
+        let variant = await em.findOne(Variant, { sku }, { populate: ['product'] });
         if (!variant) {
           variant = new Variant();
           variant.product = product;
@@ -388,6 +422,18 @@ export class PaypalService {
           em.persist(transaction);
 
           importedCount++;
+        } else {
+          // Variant already exists! Just update its details to keep them fully synked
+          variant.size = parsed.size;
+          variant.color = parsed.color;
+          
+          if (variant.product) {
+            variant.product.name = parsed.model;
+            variant.product.description = p.description || variant.product.description;
+            if (p.image_url) {
+              variant.product.imageUrl = p.image_url;
+            }
+          }
         }
       }
 

@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lagerpro-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword123
+      POSTGRES_DB: lager
+    ports:
+      - "5433:5432" # Exponerar Postgres på icke-standard port 5433 (istället för 5432) på din Windows-värddator
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - lagerpro-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: lagerpro-pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: apersson508@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: adminpassword123
+    ports:
+      - "8888:80" # Exponerar pgAdmin Web-gränssnittet på icke-standard port 8888 på din Windows-värddator
+    depends_on:
+      - postgres
+    networks:
+      - lagerpro-network
+
+networks:
+  lagerpro-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local

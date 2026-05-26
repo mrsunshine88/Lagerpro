@@ -284,66 +284,75 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
 
         <div className="products-grid">
           {filteredProducts.map((p) => (
-            <div key={p.id} className="glass-card product-card">
-              <div className="product-info-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <span className="category-tag">{p.category}</span>
-                  <h3>{p.name}</h3>
-                </div>
-                {userProfile?.role === 'admin' && (
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      onClick={() => {
-                        setEditingProduct(p);
-                        setProductName(p.name);
-                        setProductCategory(p.category);
-                        setProductDescription(p.description || '');
-                        setProductVariants(p.variants);
-                        setProductModalOpen(true);
-                      }}
-                      className="btn btn-ghost btn-icon btn-xs"
-                      title="Redigera"
-                    >
-                      <Edit style={{ width: 14, height: 14 }} />
-                    </button>
-                    <button
-                      onClick={async () => {
-                        if (confirm(`Är du säker på att du vill ta bort ${p.name}?`)) {
-                          await axios.delete(`${apiBaseUrl}/api/products/${p.id}`, getAxiosConfig());
-                          fetchProducts();
-                        }
-                      }}
-                      className="btn btn-ghost btn-icon btn-xs"
-                      style={{ color: 'var(--color-danger)' }}
-                      title="Ta bort"
-                    >
-                      <Trash2 style={{ width: 14, height: 14 }} />
-                    </button>
-                  </div>
+            <div key={p.id} className="glass-card product-card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div className="pos-shoe-photo" style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--border-light)', position: 'relative' }}>
+                {p.imageUrl ? (
+                  <img src={p.imageUrl} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ fontSize: '3rem', opacity: 0.3 }}>👟</div>
                 )}
               </div>
-              {p.description && <p className="product-desc">{p.description}</p>}
-
-              <div className="variants-section">
-                <div className="variants-list">
-                  {p.variants.map((v) => (
-                    <div key={v.id} className="variant-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderBottom: '1px solid var(--border-light)' }}>
-                      <div style={{ display: 'flex', gap: 8, fontSize: '0.8rem' }}>
-                        <span style={{ fontWeight: 600 }}>Storlek: {v.size}</span>
-                        {v.color && <span style={{ color: 'var(--text-secondary)' }}>Färg: {v.color}</span>}
-                        <span className="val-muted" style={{ fontSize: '0.7rem' }}>SKU: {v.sku}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <button onClick={async () => { await axios.post(`${apiBaseUrl}/api/variants/${v.id}/stock`, { change: -1 }, getAxiosConfig()); fetchProducts(); }} className="btn btn-ghost btn-xs" style={{ minWidth: 20, padding: 2 }}>-</button>
-                          <strong style={{ minWidth: 30, textAlign: 'center', fontSize: '0.85rem' }}>{v.stock} st</strong>
-                          <button onClick={async () => { await axios.post(`${apiBaseUrl}/api/variants/${v.id}/stock`, { change: 1 }, getAxiosConfig()); fetchProducts(); }} className="btn btn-ghost btn-xs" style={{ minWidth: 20, padding: 2 }}>+</button>
-                        </div>
-                        <span style={{ fontWeight: 700, color: 'var(--color-success)', fontSize: '0.85rem' }}>{v.selling_price} kr</span>
-                        <button onClick={() => { setQrVariant(v); setQrModalOpen(true); }} className="btn btn-ghost btn-icon btn-xs" title="Visa QR"><Eye style={{ width: 14, height: 14 }} /></button>
-                      </div>
+              <div style={{ padding: 20 }}>
+                <div className="product-info-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <span className="category-tag">{p.category}</span>
+                    <h3>{p.name}</h3>
+                  </div>
+                  {userProfile?.role === 'admin' && (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        onClick={() => {
+                          setEditingProduct(p);
+                          setProductName(p.name);
+                          setProductCategory(p.category);
+                          setProductDescription(p.description || '');
+                          setProductVariants(p.variants);
+                          setProductModalOpen(true);
+                        }}
+                        className="btn btn-ghost btn-icon btn-xs"
+                        title="Redigera"
+                      >
+                        <Edit style={{ width: 14, height: 14 }} />
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (confirm(`Är du säker på att du vill ta bort ${p.name}?`)) {
+                            await axios.delete(`${apiBaseUrl}/api/products/${p.id}`, getAxiosConfig());
+                            fetchProducts();
+                          }
+                        }}
+                        className="btn btn-ghost btn-icon btn-xs"
+                        style={{ color: 'var(--color-danger)' }}
+                        title="Ta bort"
+                      >
+                        <Trash2 style={{ width: 14, height: 14 }} />
+                      </button>
                     </div>
-                  ))}
+                  )}
+                </div>
+                {p.description && <p className="product-desc">{p.description}</p>}
+
+                <div className="variants-section">
+                  <div className="variants-list">
+                    {p.variants.map((v) => (
+                      <div key={v.id} className="variant-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderBottom: '1px solid var(--border-light)' }}>
+                        <div style={{ display: 'flex', gap: 8, fontSize: '0.8rem' }}>
+                          <span style={{ fontWeight: 600 }}>Storlek: {v.size}</span>
+                          {v.color && <span style={{ color: 'var(--text-secondary)' }}>Färg: {v.color}</span>}
+                          <span className="val-muted" style={{ fontSize: '0.7rem' }}>SKU: {v.sku}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <button onClick={async () => { await axios.post(`${apiBaseUrl}/api/variants/${v.id}/stock`, { change: -1 }, getAxiosConfig()); fetchProducts(); }} className="btn btn-ghost btn-xs" style={{ minWidth: 20, padding: 2 }}>-</button>
+                            <strong style={{ minWidth: 30, textAlign: 'center', fontSize: '0.85rem' }}>{v.stock} st</strong>
+                            <button onClick={async () => { await axios.post(`${apiBaseUrl}/api/variants/${v.id}/stock`, { change: 1 }, getAxiosConfig()); fetchProducts(); }} className="btn btn-ghost btn-xs" style={{ minWidth: 20, padding: 2 }}>+</button>
+                          </div>
+                          <span style={{ fontWeight: 700, color: 'var(--color-success)', fontSize: '0.85rem' }}>{v.selling_price} kr</span>
+                          <button onClick={() => { setQrVariant(v); setQrModalOpen(true); }} className="btn btn-ghost btn-icon btn-xs" title="Visa QR"><Eye style={{ width: 14, height: 14 }} /></button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>

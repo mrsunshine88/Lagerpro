@@ -123,23 +123,32 @@ export const PosTab: React.FC<PosTabProps> = ({
           
           <div id="pos-products-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 15, maxHeight: '60vh', overflowY: 'auto', paddingRight: 5 }}>
             {filteredPosProducts.map((p) => (
-              <div key={p.id} className="pos-product-card glass-panel" style={{ padding: 12 }}>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>{p.category}</span>
-                <strong style={{ display: 'block', fontSize: '0.9rem', marginBottom: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</strong>
+              <div key={p.id} className="pos-product-card glass-panel" style={{ padding: 0, overflow: 'hidden' }}>
+                <div className="pos-shoe-photo">
+                  {p.imageUrl ? (
+                    <img src={p.imageUrl} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <div className="pos-img-placeholder">👟</div>
+                  )}
+                </div>
+                <div className="pos-product-card-info" style={{ padding: 10 }}>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>{p.category}</span>
+                  <strong style={{ display: 'block', fontSize: '0.9rem', marginBottom: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</strong>
                 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {p.variants.map((v) => (
-                    <button
-                      key={v.id}
-                      disabled={v.stock <= 0}
-                      onClick={() => addToCart(p, v)}
-                      className={`pos-variant-btn ${v.stock <= 0 ? 'disabled' : ''}`}
-                      style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 6px', fontSize: '0.75rem', borderRadius: 4, cursor: v.stock > 0 ? 'pointer' : 'default', border: '1px solid var(--border-light)', background: 'rgba(255,255,255,0.01)' }}
-                    >
-                      <span>Storlek: {v.size} {v.color ? `(${v.color})` : ''}</span>
-                      <strong>{v.selling_price} kr ({v.stock} st)</strong>
-                    </button>
-                  ))}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {p.variants.map((v) => (
+                      <button
+                        key={v.id}
+                        disabled={v.stock <= 0}
+                        onClick={() => addToCart(p, v)}
+                        className={`pos-variant-btn ${v.stock <= 0 ? 'disabled' : ''}`}
+                        style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 6px', fontSize: '0.75rem', borderRadius: 4, cursor: v.stock > 0 ? 'pointer' : 'default', border: '1px solid var(--border-light)', background: 'rgba(255,255,255,0.01)' }}
+                      >
+                        <span>Storlek: {v.size} {v.color ? `(${v.color})` : ''}</span>
+                        <strong>{v.selling_price} kr ({v.stock} st)</strong>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             ))}

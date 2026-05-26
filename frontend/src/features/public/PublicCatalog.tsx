@@ -418,40 +418,49 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
         <section className="products-section">
           <div id="public-catalog-grid" className="products-grid">
             {filteredPublicProducts.map((p) => (
-              <div key={p.id} className="glass-card product-card">
-                <div className="product-info-header">
-                  <div>
-                    <span className="category-tag">{p.category}</span>
-                    <h3>{p.name}</h3>
-                  </div>
+              <div key={p.id} className="glass-card product-card" style={{ padding: 0, overflow: 'hidden' }}>
+                <div className="pos-shoe-photo" style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--border-light)', position: 'relative' }}>
+                  {p.imageUrl ? (
+                    <img src={p.imageUrl} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ fontSize: '3rem', opacity: 0.3 }}>👟</div>
+                  )}
                 </div>
-                {p.description && <p className="product-desc">{p.description}</p>}
-                
-                <div className="variants-section">
-                  <h4>Tillgängliga storlekar &amp; färger:</h4>
-                  <div className="variants-list" style={{ maxHeight: 200, overflowY: 'auto' }}>
-                    {p.variants.filter((v: any) => v.stock > 0).map((v: any) => (
-                      <div key={v.id} className="variant-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid var(--border-light)' }}>
-                        <div style={{ display: 'flex', gap: 10 }}>
-                          <span style={{ fontWeight: 700 }}>Storlek: {v.size || 'U'}</span>
-                          <span style={{ color: 'var(--text-secondary)' }}>Färg: {v.color || 'Uni'}</span>
+                <div style={{ padding: 20 }}>
+                  <div className="product-info-header">
+                    <div>
+                      <span className="category-tag">{p.category}</span>
+                      <h3>{p.name}</h3>
+                    </div>
+                  </div>
+                  {p.description && <p className="product-desc">{p.description}</p>}
+                  
+                  <div className="variants-section">
+                    <h4>Tillgängliga storlekar &amp; färger:</h4>
+                    <div className="variants-list" style={{ maxHeight: 200, overflowY: 'auto' }}>
+                      {p.variants.filter((v: any) => v.stock > 0).map((v: any) => (
+                        <div key={v.id} className="variant-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid var(--border-light)' }}>
+                          <div style={{ display: 'flex', gap: 10 }}>
+                            <span style={{ fontWeight: 700 }}>Storlek: {v.size || 'U'}</span>
+                            <span style={{ color: 'var(--text-secondary)' }}>Färg: {v.color || 'Uni'}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            {v.original_price > v.selling_price && (
+                              <span style={{ textDecoration: 'line-through', fontSize: '0.8rem', color: 'var(--color-danger)' }}>{v.original_price} kr</span>
+                            )}
+                            <span style={{ fontWeight: 800, color: 'var(--color-success)' }}>{v.selling_price} kr</span>
+                            <button
+                              onClick={() => {
+                                addToPublicCart(p.name, p.category, v);
+                              }}
+                              className="btn btn-primary btn-xs"
+                            >
+                              {projectConfigs[p.category]?.checkout_mode === 'ecommerce' ? 'Köp' : 'Boka'}
+                            </button>
+                          </div>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          {v.original_price > v.selling_price && (
-                            <span style={{ textDecoration: 'line-through', fontSize: '0.8rem', color: 'var(--color-danger)' }}>{v.original_price} kr</span>
-                          )}
-                          <span style={{ fontWeight: 800, color: 'var(--color-success)' }}>{v.selling_price} kr</span>
-                          <button
-                            onClick={() => {
-                              addToPublicCart(p.name, p.category, v);
-                            }}
-                            className="btn btn-primary btn-xs"
-                          >
-                            {projectConfigs[p.category]?.checkout_mode === 'ecommerce' ? 'Köp' : 'Boka'}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
