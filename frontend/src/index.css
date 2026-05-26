@@ -3215,3 +3215,140 @@ body {
     from { width: 100%; }
     to   { width: 0%; }
 }
+
+/* ==================== ADDITIONAL PREMIUM MOBILE RESPONSIVENESS OVERRIDES ==================== */
+
+/* Settings tabs horizontal scrolling list */
+.settings-tabs-list {
+    display: flex !important;
+    gap: 6px !important;
+    border-bottom: 1px solid var(--border-light) !important;
+    padding-bottom: 10px !important;
+    margin-bottom: 20px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important; /* Firefox */
+}
+.settings-tabs-list::-webkit-scrollbar {
+    display: none !important; /* Safari and Chrome */
+}
+.settings-tabs-list button {
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+}
+
+/* Responsive 2-column grid inside settings and inventory modals */
+.settings-grid-2col {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 15px !important;
+    margin-bottom: 15px !important;
+}
+
+/* Responsive discount form grid */
+.discount-form-grid {
+    display: grid !important;
+    grid-template-columns: 1.2fr 1.2fr 0.8fr 1.2fr 0.8fr !important;
+    gap: 10px !important;
+    margin-bottom: 12px !important;
+}
+
+/* Stack button actions vertically on small screens */
+.settings-actions-flex {
+    display: flex !important;
+    gap: 10px !important;
+    align-items: center !important;
+}
+
+/* Compact variant edit row grid inside Add/Edit Product modal */
+.variant-edit-row-grid {
+    display: grid !important;
+    grid-template-columns: 2fr 2fr 1fr 2fr 2fr 40px !important;
+    gap: 8px !important;
+    align-items: center !important;
+    margin-bottom: 8px !important;
+}
+
+/* Mobile Overrides (iPhones, Android, safe areas) */
+@media (max-width: 600px) {
+    .settings-grid-2col {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+    
+    .settings-actions-flex {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+    }
+    .settings-actions-flex button {
+        width: 100% !important;
+        justify-content: center !important;
+    }
+    
+    /* Transform the 6-column variant edit row into elegant compact card elements */
+    .variant-edit-row-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 12px 10px !important;
+        border: 1px solid var(--border-light) !important;
+        background: rgba(255, 255, 255, 0.02) !important;
+        border-radius: var(--radius-md) !important;
+        padding: 42px 14px 14px 14px !important; /* Top padding is larger to accommodate absolute trash button */
+        margin-bottom: 15px !important;
+        position: relative !important;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15) !important;
+    }
+    .variant-edit-row-grid input {
+        width: 100% !important;
+        box-sizing: border-box !important;
+        padding: 8px 10px !important;
+        font-size: 0.85rem !important;
+    }
+    
+    /* Elegant position for the delete button in top-right of variant card */
+    .variant-edit-row-grid button {
+        position: absolute !important;
+        top: 8px !important;
+        right: 8px !important;
+        margin: 0 !important;
+        padding: 6px !important;
+        background: rgba(239, 68, 68, 0.1) !important;
+        border: 1px solid rgba(239, 68, 68, 0.2) !important;
+        border-radius: var(--radius-sm) !important;
+    }
+    .variant-edit-row-grid button:hover {
+        background: rgba(239, 68, 68, 0.2) !important;
+    }
+    
+    /* Mobile titles or headings for custom grids */
+    .discount-form-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 12px !important;
+    }
+    .discount-form-grid .input-container:last-child {
+        grid-column: span 2 !important;
+        padding-top: 6px !important;
+    }
+    
+    /* Toast notifications: full-width on mobile */
+    #toast-container {
+        left: 16px !important;
+        right: 16px !important;
+        bottom: calc(85px + env(safe-area-inset-bottom)) !important; /* Float safely above bottom navbar */
+    }
+    .toast {
+        max-width: 100% !important;
+        width: 100% !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .discount-form-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+    .discount-form-grid .input-container:last-child {
+        grid-column: span 1 !important;
+    }
+}
+

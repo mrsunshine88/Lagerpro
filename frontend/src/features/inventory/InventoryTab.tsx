@@ -374,7 +374,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
                   <input type="text" value={productName} onChange={(e) => setProductName(e.target.value)} required placeholder="T.ex. Adidas Ultraboost..." style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
                 </div>
                 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 12 }}>
+                <div className="settings-grid-2col">
                   <div className="input-container">
                     <label>Kategori / Projekt *</label>
                     <select value={productCategory} onChange={(e) => setProductCategory(e.target.value)} className="custom-select" style={{ width: '100%', height: 42 }}>
@@ -406,7 +406,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {productVariants.map((v, idx) => (
-                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 2fr 2fr 40px', gap: 8, alignItems: 'center' }}>
+                      <div key={idx} className="variant-edit-row-grid">
                         <input type="text" placeholder="Storlek" value={v.size || ''} onChange={(e) => { const c = [...productVariants]; c[idx].size = e.target.value; setProductVariants(c); }} required style={{ padding: 6, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
                         <input type="text" placeholder="Färg" value={v.color || ''} onChange={(e) => { const c = [...productVariants]; c[idx].color = e.target.value; setProductVariants(c); }} style={{ padding: 6, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
                         <input type="number" placeholder="Lager" value={v.stock ?? 0} onChange={(e) => { const c = [...productVariants]; c[idx].stock = parseInt(e.target.value) || 0; setProductVariants(c); }} required style={{ padding: 6, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />

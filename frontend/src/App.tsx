@@ -109,6 +109,15 @@ export default function App() {
   const [swishHasCert, setSwishHasCert] = useState(false);
   const [swishHasKey, setSwishHasKey] = useState(false);
 
+  // PayPal Global settings
+  const [paypalClientId, setPaypalClientId] = useState('');
+  const [paypalClientSecret, setPaypalClientSecret] = useState('');
+  const [paypalWebhookId, setPaypalWebhookId] = useState('');
+  const [paypalMode, setPaypalMode] = useState('sandbox');
+  const [paypalHasSecret, setPaypalHasSecret] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [settingsActiveTab, setSettingsActiveTab] = useState<'profile' | 'projects' | 'discount_codes' | 'swish' | 'paypal'>('profile');
+
   // Project e-commerce configs in settings modal
   const [settingCheckoutMode, setSettingCheckoutMode] = useState('booking');
   const [settingDeliveryMethod, setSettingDeliveryMethod] = useState('pickup');
@@ -488,6 +497,41 @@ export default function App() {
     }
   };
 
+  const handleSavePaypalSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await axios.post(
+        `${API_BASE_URL}/api/paypal/config`,
+        {
+          client_id: paypalClientId.trim(),
+          client_secret: paypalClientSecret.trim(),
+          webhook_id: paypalWebhookId.trim(),
+          mode: paypalMode,
+        },
+        getAxiosConfig(),
+      );
+      setPaypalClientSecret('');
+      setPaypalHasSecret(true);
+      alert('PayPal-inställningarna har sparats och aktiverats!');
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Kunde inte spara PayPal-uppgifter.');
+    }
+  };
+
+  const handleSyncPaypalCatalog = async () => {
+    if (!confirm('Är du säker på att du vill hämta alla skoprodukter från PayPal? Detta ansluter till ditt PayPal-konto och lägger till dem i Lagerpro.')) return;
+    setIsSyncing(true);
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/paypal/sync`, {}, getAxiosConfig());
+      alert(`Synkning klar! Hämtade och skapade ${res.data.count} nya skovarianter från PayPal.`);
+      fetchProducts();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Kunde inte synka från PayPal. Kontrollera dina API-nycklar och anslutning.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleCreateProject = async () => {
     if (!newProjectName.trim()) return;
     try {
@@ -663,6 +707,16 @@ export default function App() {
             setSwishMerchantId(res.data.merchant_id || '');
             setSwishHasCert(res.data.has_cert);
             setSwishHasKey(res.data.has_key);
+          })
+          .catch(() => {});
+
+        axios
+          .get(`${API_BASE_URL}/api/paypal/config`, getAxiosConfig())
+          .then((res) => {
+            setPaypalClientId(res.data.client_id || '');
+            setPaypalWebhookId(res.data.webhook_id || '');
+            setPaypalMode(res.data.mode || 'sandbox');
+            setPaypalHasSecret(res.data.has_secret);
           })
           .catch(() => {});
       }
@@ -904,155 +958,248 @@ export default function App() {
               <h2>Lagerinställningar</h2>
               <button className="btn-close" onClick={() => setSettingsModalOpen(false)}><X /></button>
             </div>
-            <div className="modal-body" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
+            <div className="modal-body" style={{ maxHeight: '75vh', overflowY: 'auto', paddingTop: 10 }}>
               
-              <div style={{ borderBottom: '1px solid var(--border-light)', paddingBottom: 20, marginBottom: 20 }}>
-                <h3>Din profil &amp; Lösenord</h3>
-                <button onClick={() => { setProfileEmail(userProfile?.email || ''); setProfileModalOpen(true); }} className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <User style={{ width: 14, height: 14 }} />
-                  <span>Uppdatera profiluppgifter</span>
-                </button>
+              <div className="settings-tabs-list">
+                <button type="button" onClick={() => setSettingsActiveTab('profile')} className={`btn btn-xs ${settingsActiveTab === 'profile' ? 'btn-primary' : 'btn-ghost'}`}>Profil &amp; Lösenord</button>
+                {userProfile?.role === 'admin' && (
+                  <>
+                    <button type="button" onClick={() => setSettingsActiveTab('projects')} className={`btn btn-xs ${settingsActiveTab === 'projects' ? 'btn-primary' : 'btn-ghost'}`}>Partier &amp; Kategorier</button>
+                    <button type="button" onClick={() => setSettingsActiveTab('discount_codes')} className={`btn btn-xs ${settingsActiveTab === 'discount_codes' ? 'btn-primary' : 'btn-ghost'}`}>Rabattkoder</button>
+                    <button type="button" onClick={() => setSettingsActiveTab('swish')} className={`btn btn-xs ${settingsActiveTab === 'swish' ? 'btn-primary' : 'btn-ghost'}`}>Swish-nycklar</button>
+                    <button type="button" onClick={() => setSettingsActiveTab('paypal')} className={`btn btn-xs ${settingsActiveTab === 'paypal' ? 'btn-primary' : 'btn-ghost'}`}>PayPal-kassa</button>
+                  </>
+                )}
               </div>
+
+              {settingsActiveTab === 'profile' && (
+                <div style={{ paddingBottom: 10 }}>
+                  <h3>Din profil &amp; Lösenord</h3>
+                  <button onClick={() => { setProfileEmail(userProfile?.email || ''); setProfileModalOpen(true); }} className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <User style={{ width: 14, height: 14 }} />
+                    <span>Uppdatera profiluppgifter</span>
+                  </button>
+                </div>
+              )}
 
               {userProfile?.role === 'admin' && (
                 <>
-                  <div style={{ borderBottom: '1px solid var(--border-light)', paddingBottom: 20, marginBottom: 20 }}>
-                    <h3>Partiinvesteringar &amp; Marginal</h3>
-                    <form onSubmit={handleUpdateSettings}>
-                      <div className="input-container" style={{ marginBottom: 12 }}>
-                        <label>Välj kategori / projektparti</label>
-                        <select value={selectedSettingProject} onChange={(e) => setSelectedSettingProject(e.target.value)} className="custom-select" style={{ width: '100%', height: 42 }}>
-                          <option value="Allmänt">Allmänt</option>
-                          <option value="Skor">Skor</option>
-                          <option value="Krukor">Krukor</option>
-                          <option value="Utemöbler">Utemöbler</option>
+                  {settingsActiveTab === 'projects' && (
+                    <>
+                      <div style={{ borderBottom: '1px solid var(--border-light)', paddingBottom: 20, marginBottom: 20 }}>
+                        <h3>Partiinvesteringar &amp; Marginal</h3>
+                        <form onSubmit={handleUpdateSettings}>
+                          <div className="input-container" style={{ marginBottom: 12 }}>
+                            <label>Välj kategori / projektparti</label>
+                            <select value={selectedSettingProject} onChange={(e) => setSelectedSettingProject(e.target.value)} className="custom-select" style={{ width: '100%', height: 42 }}>
+                              <option value="Allmänt">Allmänt</option>
+                              <option value="Skor">Skor</option>
+                              <option value="Krukor">Krukor</option>
+                              <option value="Utemöbler">Utemöbler</option>
+                              {projectsList.map((p) => (
+                                <option key={p} value={p}>{p}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="settings-grid-2col">
+                            <div className="input-container">
+                              <label>Investerat kapital (Lump-sum, kr)</label>
+                              <input type="number" min="0" value={settingInvestment} onChange={(e) => setSettingInvestment(parseFloat(e.target.value) || 0)} style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                            </div>
+                            <div className="input-container">
+                              <label>Standardrabatt (%)</label>
+                              <input type="number" min="0" max="100" value={settingDiscount} onChange={(e) => setSettingDiscount(parseFloat(e.target.value) || 0)} style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                            </div>
+                          </div>
+
+                          <div className="settings-grid-2col">
+                            <div className="input-container">
+                              <label>Betalsätt</label>
+                              <select
+                                value={settingCheckoutMode}
+                                onChange={(e) => setSettingCheckoutMode(e.target.value)}
+                                className="custom-select"
+                                style={{ width: '100%', height: 42 }}
+                              >
+                                <option value="booking">Gratis Butiksbokning</option>
+                                <option value="ecommerce">Direktbetalning online via Swish</option>
+                              </select>
+                            </div>
+                            <div className="input-container">
+                              <label>Leveranssätt</label>
+                              <select
+                                value={settingDeliveryMethod}
+                                onChange={(e) => setSettingDeliveryMethod(e.target.value)}
+                                className="custom-select"
+                                style={{ width: '100%', height: 42 }}
+                              >
+                                <option value="pickup">Endast upphämtning i butik</option>
+                                <option value="shipping_pickup">Aktivera PostNord hemleverans</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {settingDeliveryMethod === 'shipping_pickup' && (
+                            <div className="input-container" style={{ marginBottom: 15 }}>
+                              <label>Fraktavgift vid hemleverans (kr)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={settingShippingCost}
+                                onChange={(e) => setSettingShippingCost(parseFloat(e.target.value) || 0)}
+                                style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                              />
+                            </div>
+                          )}
+
+                          <button type="submit" className="btn btn-primary btn-sm">Spara partiinställningar</button>
+                        </form>
+                      </div>
+
+                      <div>
+                        <h3>Skapa / Ta bort projektkategorier</h3>
+                        <div style={{ display: 'flex', gap: 10, marginBottom: 15 }}>
+                          <input type="text" placeholder="Nytt projektnamn..." value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} style={{ flex: 1, padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                          <button onClick={handleCreateProject} className="btn btn-primary btn-sm">Skapa</button>
+                        </div>
+
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                           {projectsList.map((p) => (
-                            <option key={p} value={p}>{p}</option>
+                            <div key={p} className="badge" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', fontSize: '0.8rem' }}>
+                              <span>{p}</span>
+                              <button onClick={() => handleDeleteProject(p)} style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: 0 }}><X style={{ width: 14, height: 14 }} /></button>
+                            </div>
                           ))}
-                        </select>
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 15 }}>
-                        <div className="input-container">
-                          <label>Investerat kapital (Lump-sum, kr)</label>
-                          <input type="number" min="0" value={settingInvestment} onChange={(e) => setSettingInvestment(parseFloat(e.target.value) || 0)} style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
-                        </div>
-                        <div className="input-container">
-                          <label>Standardrabatt (%)</label>
-                          <input type="number" min="0" max="100" value={settingDiscount} onChange={(e) => setSettingDiscount(parseFloat(e.target.value) || 0)} style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
                         </div>
                       </div>
+                    </>
+                  )}
 
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 15 }}>
-                        <div className="input-container">
-                          <label>Betalsätt</label>
-                          <select
-                            value={settingCheckoutMode}
-                            onChange={(e) => setSettingCheckoutMode(e.target.value)}
-                            className="custom-select"
-                            style={{ width: '100%', height: 42 }}
-                          >
-                            <option value="booking">Gratis Butiksbokning</option>
-                            <option value="ecommerce">Direktbetalning online via Swish</option>
-                          </select>
-                        </div>
-                        <div className="input-container">
-                          <label>Leveranssätt</label>
-                          <select
-                            value={settingDeliveryMethod}
-                            onChange={(e) => setSettingDeliveryMethod(e.target.value)}
-                            className="custom-select"
-                            style={{ width: '100%', height: 42 }}
-                          >
-                            <option value="pickup">Endast upphämtning i butik</option>
-                            <option value="shipping_pickup">Aktivera PostNord hemleverans</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      {settingDeliveryMethod === 'shipping_pickup' && (
-                        <div className="input-container" style={{ marginBottom: 15 }}>
-                          <label>Fraktavgift vid hemleverans (kr)</label>
+                  {settingsActiveTab === 'swish' && (
+                    <div>
+                      <h3>Swish API-nycklar (Näthandel)</h3>
+                      <form onSubmit={handleSaveSwishSettings}>
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label>Swish-nummer (Merchant ID) *</label>
                           <input
-                            type="number"
-                            min="0"
-                            value={settingShippingCost}
-                            onChange={(e) => setSettingShippingCost(parseFloat(e.target.value) || 0)}
+                            type="text"
+                            placeholder="T.ex. 1231112233"
+                            value={swishMerchantId}
+                            onChange={(e) => setSwishMerchantId(e.target.value)}
+                            required
                             style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
                           />
                         </div>
-                      )}
 
-                      <button type="submit" className="btn btn-primary btn-sm">Spara partiinställningar</button>
-                    </form>
-                  </div>
-
-                  <div style={{ borderBottom: '1px solid var(--border-light)', paddingBottom: 20, marginBottom: 20 }}>
-                    <h3>Skapa / Ta bort projektkategorier</h3>
-                    <div style={{ display: 'flex', gap: 10, marginBottom: 15 }}>
-                      <input type="text" placeholder="Nytt projektnamn..." value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} style={{ flex: 1, padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
-                      <button onClick={handleCreateProject} className="btn btn-primary btn-sm">Skapa</button>
-                    </div>
-
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {projectsList.map((p) => (
-                        <div key={p} className="badge" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', fontSize: '0.8rem' }}>
-                          <span>{p}</span>
-                          <button onClick={() => handleDeleteProject(p)} style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: 0 }}><X style={{ width: 14, height: 14 }} /></button>
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>SSL Client Certificate (PEM-format)</span>
+                            {swishHasCert && <span style={{ color: 'var(--color-success)', fontSize: '0.8rem', fontWeight: 600 }}>✓ Certifikat sparat</span>}
+                          </label>
+                          <textarea
+                            placeholder="Klistra in hela certifikattexten (inklusive -----BEGIN CERTIFICATE-----) här..."
+                            value={swishCert}
+                            onChange={(e) => setSwishCert(e.target.value)}
+                            style={{ width: '100%', height: 100, padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.8rem' }}
+                          />
                         </div>
-                      ))}
+
+                        <div className="input-container" style={{ marginBottom: 15 }}>
+                          <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>SSL Client Private Key (KEY-format)</span>
+                            {swishHasKey && <span style={{ color: 'var(--color-success)', fontSize: '0.8rem', fontWeight: 600 }}>✓ Privat nyckel sparad</span>}
+                          </label>
+                          <textarea
+                            placeholder="Klistra in hela nyckeltexten (inklusive -----BEGIN PRIVATE KEY-----) här..."
+                            value={swishKey}
+                            onChange={(e) => setSwishKey(e.target.value)}
+                            style={{ width: '100%', height: 100, padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.8rem' }}
+                          />
+                        </div>
+
+                        <button type="submit" className="btn btn-primary btn-sm">Spara Swish-uppgifter</button>
+                      </form>
                     </div>
-                  </div>
+                  )}
 
-                  <div style={{ borderBottom: '1px solid var(--border-light)', paddingBottom: 20, marginBottom: 20 }}>
-                    <h3>Swish API-nycklar (Näthandel)</h3>
-                    <form onSubmit={handleSaveSwishSettings}>
-                      <div className="input-container" style={{ marginBottom: 12 }}>
-                        <label>Swish-nummer (Merchant ID) *</label>
-                        <input
-                          type="text"
-                          placeholder="T.ex. 1231112233"
-                          value={swishMerchantId}
-                          onChange={(e) => setSwishMerchantId(e.target.value)}
-                          required
-                          style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
-                        />
-                      </div>
+                  {settingsActiveTab === 'paypal' && (
+                    <div>
+                      <h3>PayPal Integration &amp; Katalogsynkning</h3>
+                      <form onSubmit={handleSavePaypalSettings}>
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label>PayPal Client ID *</label>
+                          <input
+                            type="text"
+                            placeholder="Klistra in ditt PayPal Client ID..."
+                            value={paypalClientId}
+                            onChange={(e) => setPaypalClientId(e.target.value)}
+                            required
+                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                        </div>
 
-                      <div className="input-container" style={{ marginBottom: 12 }}>
-                        <label style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span>SSL Client Certificate (PEM-format)</span>
-                          {swishHasCert && <span style={{ color: 'var(--color-success)', fontSize: '0.8rem', fontWeight: 600 }}>✓ Certifikat sparat</span>}
-                        </label>
-                        <textarea
-                          placeholder="Klistra in hela certifikattexten (inklusive -----BEGIN CERTIFICATE-----) här..."
-                          value={swishCert}
-                          onChange={(e) => setSwishCert(e.target.value)}
-                          style={{ width: '100%', height: 100, padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.8rem' }}
-                        />
-                      </div>
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>PayPal Client Secret</span>
+                            {paypalHasSecret && <span style={{ color: 'var(--color-success)', fontSize: '0.8rem', fontWeight: 600 }}>✓ Secret sparad</span>}
+                          </label>
+                          <input
+                            type="password"
+                            placeholder={paypalHasSecret ? "••••••••••••••••••••" : "Klistra in ditt PayPal Client Secret..."}
+                            value={paypalClientSecret}
+                            onChange={(e) => setPaypalClientSecret(e.target.value)}
+                            required={!paypalHasSecret}
+                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                        </div>
 
-                      <div className="input-container" style={{ marginBottom: 15 }}>
-                        <label style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span>SSL Client Private Key (KEY-format)</span>
-                          {swishHasKey && <span style={{ color: 'var(--color-success)', fontSize: '0.8rem', fontWeight: 600 }}>✓ Privat nyckel sparad</span>}
-                        </label>
-                        <textarea
-                          placeholder="Klistra in hela nyckeltexten (inklusive -----BEGIN PRIVATE KEY-----) här..."
-                          value={swishKey}
-                          onChange={(e) => setSwishKey(e.target.value)}
-                          style={{ width: '100%', height: 100, padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, fontFamily: 'monospace', fontSize: '0.8rem' }}
-                        />
-                      </div>
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label>PayPal Webhook ID (för säljsynk)</label>
+                          <input
+                            type="text"
+                            placeholder="Klistra in ditt PayPal Webhook ID..."
+                            value={paypalWebhookId}
+                            onChange={(e) => setPaypalWebhookId(e.target.value)}
+                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                        </div>
 
-                      <button type="submit" className="btn btn-primary btn-sm">Spara Swish-uppgifter</button>
-                    </form>
-                  </div>
+                        <div className="input-container" style={{ marginBottom: 15 }}>
+                          <label>PayPal Miljö (Mode)</label>
+                          <select
+                            value={paypalMode}
+                            onChange={(e) => setPaypalMode(e.target.value)}
+                            className="custom-select"
+                            style={{ width: '100%', height: 42 }}
+                          >
+                            <option value="sandbox">Sandbox (Testmiljö)</option>
+                            <option value="live">Live (Skarpt läge)</option>
+                          </select>
+                        </div>
 
-                  <div>
-                    <h3>Hantera Rabattkoder</h3>
+                        <div className="settings-actions-flex">
+                          <button type="submit" className="btn btn-primary btn-sm">Spara PayPal-nycklar</button>
+                          <button
+                            type="button"
+                            onClick={handleSyncPaypalCatalog}
+                            disabled={isSyncing || !paypalClientId}
+                            className="btn btn-secondary btn-sm"
+                            style={{ borderColor: 'var(--color-accent)', color: 'var(--color-accent)' }}
+                          >
+                            {isSyncing ? 'Synkar produkter...' : 'Hämta skoprodukter från PayPal'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {settingsActiveTab === 'discount_codes' && (
+                    <div>
+                      <h3>Hantera Rabattkoder</h3>
+
                     <form onSubmit={handleSaveDiscountCode} style={{ marginBottom: 15, background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', padding: 12, borderRadius: 6 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.2fr 0.8fr 1.2fr 0.8fr', gap: 10, marginBottom: 12 }}>
+                      <div className="discount-form-grid">
                         <div className="input-container">
                           <label style={{ fontSize: '0.75rem', marginBottom: 4 }}>Välj projekt/kategori</label>
                           <select
@@ -1228,8 +1375,9 @@ export default function App() {
                       </table>
                     </div>
                   </div>
-                </>
-              )}
+                )}
+              </>
+            )}
             </div>
           </div>
         </div>
