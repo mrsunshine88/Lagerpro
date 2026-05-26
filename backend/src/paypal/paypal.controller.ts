@@ -57,19 +57,33 @@ export class PaypalController {
     return { success: true, message: 'PayPal-inställningarna har sparats.' };
   }
 
-  /**
-   * Admin-only endpoint to trigger a products import from PayPal Catalog API.
-   */
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @Post('paypal/sync')
   @HttpCode(HttpStatus.OK)
-  async syncCatalog() {
+  async syncCatalog(@Body() body: { targetProject?: string }) {
     try {
-      const count = await this.paypalService.syncPaypalCatalog();
+      const count = await this.paypalService.syncPaypalCatalog(body?.targetProject);
       return { success: true, count, message: `Synkning klar! Importerade ${count} nya sko-varianter.` };
     } catch (error) {
       this.logger.error(`Misslyckades vid synkning av PayPal-katalog: ${error.message}`);
+      return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * Admin-only endpoint to reset simulated test transactions and restore stock levels.
+   */
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('paypal/simulate/reset')
+  @HttpCode(HttpStatus.OK)
+  async resetSimulations() {
+    try {
+      const result = await this.paypalService.resetSimulatedTransactions();
+      return { success: true, count: result.revertedCount, message: `Återställning klar! Återställde saldon för ${result.revertedCount} transaktioner.` };
+    } catch (error) {
+      this.logger.error(`Misslyckades vid nollställning av simuleringar: ${error.message}`);
       return { success: false, message: error.message };
     }
   }

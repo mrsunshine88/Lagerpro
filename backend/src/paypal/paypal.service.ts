@@ -193,6 +193,7 @@ export class PaypalService {
         transaction.quantity = purchaseQty;
         transaction.purchasePrice = variant.purchasePrice;
         transaction.sellingPrice = item.price || variant.sellingPrice;
+        transaction.isSimulation = isSimulated;
         
         em.persist(transaction);
         updatedCount++;
@@ -326,13 +327,15 @@ export class PaypalService {
     }
   }
 
-  async syncPaypalCatalog(): Promise<number> {
+  async syncPaypalCatalog(targetProject?: string): Promise<number> {
     const creds = await this.getCredentials();
     if (!creds.client_id || !creds.client_secret) {
       throw new Error('PayPal Client ID och Secret saknas. Spara dina nycklar först.');
     }
 
-    this.logger.log('Startar synkning av produktkatalogen från PayPal...');
+    const finalCategory = targetProject?.trim() || 'Skor';
+
+    this.logger.log(`Startar synkning av produktkatalogen från PayPal till projekt '${finalCategory}'...`);
     const accessToken = await this.getPaypalAccessToken(creds.client_id, creds.client_secret, creds.mode);
     const baseUrl = creds.mode === 'live' ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com';
 
@@ -381,11 +384,11 @@ export class PaypalService {
         const parsed = this.parseShoeName(name);
 
         // Find or create product
-        let product = await em.findOne(Product, { name: parsed.model, category: 'Skor' });
+        let product = await em.findOne(Product, { name: parsed.model, category: finalCategory });
         if (!product) {
           product = new Product();
           product.name = parsed.model;
-          product.category = 'Skor';
+          product.category = finalCategory;
           product.description = p.description || 'Importerad från PayPal-katalog.';
           product.imageUrl = p.image_url || undefined;
           em.persist(product);
@@ -430,6 +433,7 @@ export class PaypalService {
           if (variant.product) {
             variant.product.name = parsed.model;
             variant.product.description = p.description || variant.product.description;
+            variant.product.category = finalCategory;
             if (p.image_url) {
               variant.product.imageUrl = p.image_url;
             }
@@ -470,5 +474,31 @@ export class PaypalService {
     }
     
     return { model, color, size };
+  }
+
+  async resetSimulatedTransactions(): Promise<{ success: boolean; revertedCount: number }> {
+    this.logger.log('Startar återställning av alla simulerade köp...');
+    return this.em.transactional(async (em) => {
+      // Find all transaction records marked as simulation
+      const simulatedTxList = await em.find(Transaction, { isSimulation: true }, { populate: ['variant'] });
+      
+      let revertedCount = 0;
+      for (const tx of simulatedTxList) {
+        const variant = tx.variant;
+        if (variant) {
+          if (tx.type === 'sale') {
+            variant.stock += tx.quantity; // Add back sold items
+          } else if (tx.type === 'purchase') {
+            variant.stock = Math.max(0, variant.stock - tx.quantity); // Subtract purchased items
+          }
+          this.logger.log(`[ÅTERSTÄLLNING] SKU: ${variant.sku} | Återställde ${tx.quantity} st p.g.a. raderat testköp.`);
+        }
+        em.remove(tx);
+        revertedCount++;
+      }
+      
+      await em.flush();
+      return { success: true, revertedCount };
+    });
   }
 }

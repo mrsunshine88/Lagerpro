@@ -68,6 +68,17 @@ async function runMockedFlowTest() {
         mockDatabase.transactions.push(entity);
       }
     }),
+    find: jestFn(async (entityClass: any, cond: any) => {
+      if (entityClass === Transaction) {
+        return mockDatabase.transactions.filter(t => t.isSimulation === cond.isSimulation);
+      }
+      return [];
+    }),
+    remove: jestFn((entity: any) => {
+      if (entity instanceof Transaction) {
+        mockDatabase.transactions = mockDatabase.transactions.filter(t => t !== entity);
+      }
+    }),
     flush: jestFn(async () => {}),
     transactional: jestFn(async (cb: any) => {
       return cb(mockEM);
@@ -328,6 +339,73 @@ async function runMockedFlowTest() {
       throw new Error("Dubblettuppdateringen misslyckades! Fält uppdaterades inte korrekt på den befintliga varianten.");
     }
     console.log("     ✓ Dubblettundvikande och saldouppdatering fungerar helt perfekt!");
+
+    // ==================== FLOW 6: WEBHOOK SIMULATION & ROLLBACK ====================
+    console.log("\n[6/6] Testar Webhook-simulering & Nollställning (Rollback) av saldon...");
+    
+    // Set settings active category mapping target
+    const targetProjectName = "Ramdala Krukor";
+    console.log(`     ✓ Kör synkning till ett anpassat destinationsprojekt: '${targetProjectName}'...`);
+    const importCountTarget = await paypalService.syncPaypalCatalog(targetProjectName);
+    console.log(`     ✓ Importerade till '${targetProjectName}': ${importCountTarget} st (Då de redan fanns som Skor men nu skapas under ${targetProjectName})`);
+    
+    const hanna42Target = Object.values(mockDatabase.variants).find(v => v.product?.category === targetProjectName && v.size === "42");
+    if (!hanna42Target) {
+      throw new Error(`Projektmappning misslyckades! Hittade inte sko under projektet '${targetProjectName}'.`);
+    }
+    console.log(`     ✓ Verifierar projektmappning: sko '${hanna42Target.product?.name}' ligger under kategori '${hanna42Target.product?.category}' (Förväntat: '${targetProjectName}')`);
+
+    // Verify initial stock of target shoe
+    const initialStock = hanna42Target.stock; // 1 st
+    console.log(`     ✓ Ursprungligt lagersaldo för SKU '${hanna42Target.sku}': ${initialStock} st`);
+
+    // Trigger simulation payment
+    const simPayload = {
+      event_type: "PAYMENT.CAPTURE.COMPLETED",
+      is_simulation: true,
+      simulated_items: [
+        {
+          sku: hanna42Target.sku,
+          quantity: 1, // simulated sale of 1 unit (reverting it should add 1 back)
+          price: 982.0
+        }
+      ]
+    };
+
+    console.log(`     ✓ Skickar SIMULERAT köp (is_simulation: true) av 1 st för SKU '${hanna42Target.sku}'...`);
+    const simRes = await paypalService.handleWebhook(simPayload, {});
+    console.log(`     ✓ Webhook simulering svar: ${JSON.stringify(simRes)}`);
+
+    console.log(`     ✓ Verifierar reducerat saldo:`);
+    console.log(`       - Nytt lagersaldo: ${hanna42Target.stock} st (Förväntat: 0 st)`);
+    if ((hanna42Target.stock as any) !== 0) {
+      throw new Error(`Simulerat köp misslyckades med saldojustering! Fick ${hanna42Target.stock}`);
+    }
+
+    // Verify simulation transaction log in database
+    const simTx = mockDatabase.transactions.find(t => t.variant.sku === hanna42Target.sku && t.isSimulation === true);
+    if (!simTx) {
+      throw new Error("Transaktionen markerades INTE som simulation i databasen!");
+    }
+    console.log("     ✓ Transaktionsposten har registrerats korrekt med 'isSimulation = true' flagga.");
+
+    // Now trigger simulation rollback
+    console.log("     ✓ Startar automatisk återställning (Nollställ testerna)...");
+    const resetRes = await paypalService.resetSimulatedTransactions();
+    console.log(`     ✓ Återställningssvar: ${JSON.stringify(resetRes)} (Återställde ${resetRes.revertedCount} transaktioner)`);
+
+    console.log("     ✓ Verifierar återställt lagersaldo efter nollställning:");
+    console.log(`       - Saldo i databas: ${hanna42Target.stock} st (Förväntat: 1 st)`);
+    if ((hanna42Target.stock as any) !== 1) {
+      throw new Error(`Lagersaldo återställdes inte korrekt! Fick ${hanna42Target.stock}, förväntade sig 1.`);
+    }
+
+    const txCleared = mockDatabase.transactions.find(t => t.variant.sku === hanna42Target.sku && t.isSimulation === true);
+    if (txCleared) {
+      throw new Error("Simuleringstransaktionen rensades inte från databasen!");
+    }
+    console.log("     ✓ Simulerad transaktion raderades helt ur historiken.");
+    console.log("     ✓ Lagersaldo och ekonomistatistik återställdes helt perfekt!");
 
     console.log("\n=========================================================");
     console.log("      INTEGRATIONSTEST LYCKADES - ALLA FLÖDEN OK!");

@@ -117,7 +117,16 @@ export default function App() {
   const [paypalHasSecret, setPaypalHasSecret] = useState(false);
   const [paypalCategoryFilter, setPaypalCategoryFilter] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
-  const [settingsActiveTab, setSettingsActiveTab] = useState<'profile' | 'projects' | 'discount_codes' | 'swish' | 'paypal'>('profile');
+  const [targetSyncProject, setTargetSyncProject] = useState('Skor');
+  
+  // Webhook Simulation settings
+  const [simulatedSku, setSimulatedSku] = useState('');
+  const [simulatedQty, setSimulatedQty] = useState(1);
+  const [simulatedPrice, setSimulatedPrice] = useState(1000);
+  const [isSimulatingPurchase, setIsSimulatingPurchase] = useState(false);
+  const [isResettingSimulations, setIsResettingSimulations] = useState(false);
+
+  const [settingsActiveTab, setSettingsActiveTab] = useState<'profile' | 'projects' | 'discount_codes' | 'swish' | 'paypal' | 'simulation'>('profile');
 
   // Project e-commerce configs in settings modal
   const [settingCheckoutMode, setSettingCheckoutMode] = useState('booking');
@@ -520,17 +529,70 @@ export default function App() {
     }
   };
 
-  const handleSyncPaypalCatalog = async () => {
-    if (!confirm('Är du säker på att du vill hämta alla skoprodukter från PayPal? Detta ansluter till ditt PayPal-konto och lägger till dem i Lagerpro.')) return;
+  const handleSyncPaypalCatalog = async (targetProject?: string) => {
+    if (!confirm(`Är du säker på att du vill hämta alla skoprodukter från PayPal? Detta ansluter till ditt PayPal-konto och lägger till dem i Lagerpro${targetProject ? ` under projektet "${targetProject}"` : ''}.`)) return;
     setIsSyncing(true);
     try {
-      const res = await axios.post(`${API_BASE_URL}/api/paypal/sync`, {}, getAxiosConfig());
-      alert(`Synkning klar! Hämtade och skapade ${res.data.count} nya skovarianter från PayPal.`);
+      const res = await axios.post(`${API_BASE_URL}/api/paypal/sync`, { targetProject }, getAxiosConfig());
+      alert(`Synkning klar! Hämtade och skapade ${res.data.count} nya sko-varianter från PayPal.`);
       fetchProducts();
     } catch (err: any) {
       alert(err.response?.data?.error || 'Kunde inte synka från PayPal. Kontrollera dina API-nycklar och anslutning.');
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleSimulateWebhookPurchase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!simulatedSku.trim()) {
+      alert('Vänligen välj eller ange en streckkod / SKU.');
+      return;
+    }
+    setIsSimulatingPurchase(true);
+    try {
+      const payload = {
+        event_type: "PAYMENT.CAPTURE.COMPLETED",
+        is_simulation: true,
+        simulated_items: [
+          {
+            sku: simulatedSku.trim(),
+            quantity: simulatedQty,
+            price: simulatedPrice
+          }
+        ]
+      };
+      const res = await axios.post(`${API_BASE_URL}/api/webhooks/paypal`, payload, getAxiosConfig());
+      if (res.data.success) {
+        alert(`Simulering lyckades! ${res.data.message}`);
+        fetchProducts();
+        if (userProfile?.role === 'admin') fetchAnalytics();
+      } else {
+        alert(`Simulering misslyckades: ${res.data.message}`);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Koppling till webhook-simulator misslyckades.');
+    } finally {
+      setIsSimulatingPurchase(false);
+    }
+  };
+
+  const handleResetSimulations = async () => {
+    if (!confirm('Är du säker på att du vill nollställa alla simulerade köp? Detta lägger tillbaka skosaldon i lagret och raderar testtransaktionerna permanent från ekonomifliken.')) return;
+    setIsResettingSimulations(true);
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/paypal/simulate/reset`, {}, getAxiosConfig());
+      if (res.data.success) {
+        alert(`Nollställning lyckades! Återställde saldon och raderade ${res.data.count} testtransaktioner.`);
+        fetchProducts();
+        if (userProfile?.role === 'admin') fetchAnalytics();
+      } else {
+        alert(`Kunde inte nollställa: ${res.data.message}`);
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Koppling till återställnings-API:et misslyckades.');
+    } finally {
+      setIsResettingSimulations(false);
     }
   };
 
@@ -971,6 +1033,7 @@ export default function App() {
                     <button type="button" onClick={() => setSettingsActiveTab('discount_codes')} className={`btn btn-xs ${settingsActiveTab === 'discount_codes' ? 'btn-primary' : 'btn-ghost'}`}>Rabattkoder</button>
                     <button type="button" onClick={() => setSettingsActiveTab('swish')} className={`btn btn-xs ${settingsActiveTab === 'swish' ? 'btn-primary' : 'btn-ghost'}`}>Swish-nycklar</button>
                     <button type="button" onClick={() => setSettingsActiveTab('paypal')} className={`btn btn-xs ${settingsActiveTab === 'paypal' ? 'btn-primary' : 'btn-ghost'}`}>PayPal-kassa</button>
+                    <button type="button" onClick={() => setSettingsActiveTab('simulation')} className={`btn btn-xs ${settingsActiveTab === 'simulation' ? 'btn-primary' : 'btn-ghost'}`}>Simulering</button>
                   </>
                 )}
               </div>
@@ -1192,19 +1255,129 @@ export default function App() {
                           </select>
                         </div>
 
+                        <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', padding: 12, borderRadius: 6, marginBottom: 20 }}>
+                          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Välj destinationsprojekt i Lagerpro för PayPal-synkning:</label>
+                          <div style={{ display: 'flex', gap: 10 }}>
+                            <select
+                              value={targetSyncProject}
+                              onChange={(e) => setTargetSyncProject(e.target.value)}
+                              className="custom-select"
+                              style={{ flex: 1, height: 38 }}
+                            >
+                              <option value="Skor">Skor</option>
+                              <option value="Krukor">Krukor</option>
+                              <option value="Utemöbler">Utemöbler</option>
+                              {projectsList.map((p) => (
+                                <option key={p} value={p}>{p}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => handleSyncPaypalCatalog(targetSyncProject)}
+                              disabled={isSyncing || !paypalClientId}
+                              className="btn btn-secondary btn-sm"
+                              style={{ borderColor: 'var(--color-accent)', color: 'var(--color-accent)', height: 38 }}
+                            >
+                              {isSyncing ? 'Synkar...' : 'Hämta skoprodukter'}
+                            </button>
+                          </div>
+                        </div>
+
                         <div className="settings-actions-flex">
                           <button type="submit" className="btn btn-primary btn-sm">Spara PayPal-nycklar</button>
-                          <button
-                            type="button"
-                            onClick={handleSyncPaypalCatalog}
-                            disabled={isSyncing || !paypalClientId}
-                            className="btn btn-secondary btn-sm"
-                            style={{ borderColor: 'var(--color-accent)', color: 'var(--color-accent)' }}
-                          >
-                            {isSyncing ? 'Synkar produkter...' : 'Hämta skoprodukter från PayPal'}
-                          </button>
                         </div>
                       </form>
+                    </div>
+                  )}
+
+                  {settingsActiveTab === 'simulation' && (
+                    <div>
+                      <h3>Utvecklarverktyg &amp; Webhook-simulering</h3>
+                      
+                      <div style={{ background: 'rgba(245, 158, 11, 0.06)', border: '1px dashed rgba(245, 158, 11, 0.3)', padding: 12, borderRadius: 6, marginBottom: 20 }}>
+                        <p style={{ margin: 0, fontSize: '0.8rem', color: '#fbbf24', lineHeight: 1.5 }}>
+                          <strong>Testläge:</strong> Här kan du simulera ett PayPal-köp och testa hur Lagerpro uppdaterar lagersaldot och bokför intäkten automatiskt under <strong>Ekonomi</strong>. Genom att nollställa testerna återställs alla lagersaldon till sitt ursprungliga skick.
+                        </p>
+                      </div>
+
+                      <form onSubmit={handleSimulateWebhookPurchase} style={{ marginBottom: 25 }}>
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label>Målsko / Variant att sälja *</label>
+                          <select
+                            value={simulatedSku}
+                            onChange={(e) => {
+                              setSimulatedSku(e.target.value);
+                              // Auto-fill price based on variant selling price if found
+                              const matched = products.flatMap(p => p.variants).find(v => v.sku === e.target.value);
+                              if (matched) {
+                                setSimulatedPrice(matched.selling_price);
+                              }
+                            }}
+                            required
+                            className="custom-select"
+                            style={{ width: '100%', height: 42 }}
+                          >
+                            <option value="">-- Välj en sko från lagret --</option>
+                            {products.flatMap(p => 
+                              p.variants.map(v => (
+                                <option key={v.sku} value={v.sku}>
+                                  {p.name} - Storlek {v.size} {v.color ? `(${v.color})` : ''} [SKU: {v.sku}] (Saldo: {v.stock} st)
+                                </option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+
+                        <div className="settings-grid-2col">
+                          <div className="input-container">
+                            <label>Antal par att sälja</label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={simulatedQty}
+                              onChange={(e) => setSimulatedQty(parseInt(e.target.value) || 1)}
+                              required
+                              style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                            />
+                          </div>
+                          <div className="input-container">
+                            <label>Simulerat försäljningspris per st (kr)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={simulatedPrice}
+                              onChange={(e) => setSimulatedPrice(parseFloat(e.target.value) || 0)}
+                              required
+                              style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isSimulatingPurchase || !simulatedSku}
+                          className="btn btn-primary btn-full"
+                          style={{ marginTop: 15 }}
+                        >
+                          {isSimulatingPurchase ? 'Skickar simulerad betalning...' : 'Skicka simulerat köp (PayPal Webhook)'}
+                        </button>
+                      </form>
+
+                      <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 20 }}>
+                        <h4 style={{ margin: '0 0 8px 0', color: 'var(--color-danger)' }}>Återställ &amp; Nollställ Testerna</h4>
+                        <p style={{ margin: '0 0 15px 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                          Ta bort alla fiktiva simulationstransaktioner och återställ lagersaldona för de påverkade skovarianterna till hur de var innan du påbörjade testerna.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleResetSimulations}
+                          disabled={isResettingSimulations}
+                          className="btn btn-secondary btn-full"
+                          style={{ borderColor: 'var(--color-danger)', color: 'var(--color-danger)' }}
+                        >
+                          {isResettingSimulations ? 'Nollställer...' : '🧹 Nollställ och ta bort simulerade testköp'}
+                        </button>
+                      </div>
                     </div>
                   )}
 

@@ -21,6 +21,9 @@ export class Transaction {
   @Property({ type: 'float', default: 0.0 })
   sellingPrice = 0.0;
 
+  @Property({ default: false })
+  isSimulation = false;
+
   @Property({ defaultRaw: 'CURRENT_TIMESTAMP' })
   createdAt = new Date();
 }
