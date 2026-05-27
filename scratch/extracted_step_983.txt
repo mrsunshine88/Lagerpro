@@ -1,0 +1,5 @@
+=== TARGET CONTENT ===
+"        </div>\n      )}     </table>\n                    </div>\n                  </div>\n                )}\n              </>\n            )}\n            </div>\n          </div>\n        </div>\n      )}\n"
+
+=== REPLACEMENT CONTENT ===
+"        </div>\n      )}\n"

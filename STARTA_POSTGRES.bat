@@ -1,25 +1,26 @@
 @echo off
 title Starta PostgreSQL databas - Lagerpro
 chcp 65001 > nul
+cls
 echo =========================================================
-echo       STARTAR POSTGRESQL & ADMINER VIA DOCKER
+echo       STARTAR POSTGRESQL OCH ADMINER VIA DOCKER
 echo =========================================================
 echo.
 echo Startar containrarna i bakgrunden...
 docker compose up -d
 echo.
 echo =========================================================
-echo   STATUS: Containrarna körs nu!
+echo   STATUS: Containrarna koers nu!
 echo.
-echo   * PostgreSQL-databasen är aktiv på port: 5439
-echo   * Adminer webbgränssnitt körs på: http://localhost:8089
+echo   * PostgreSQL-databasen aer aktiv pa port: 5439
+echo   * Adminer webbgraenssnitt koers pa: http://localhost:8089
 echo.
-echo   Användaruppgifter:
+echo   Anvaendaruppgifter:
 echo     - System:   PostgreSQL
-echo     - Server:   postgres_db (eller localhost,5439 från Windows)
+echo     - Server:   postgres_db (eller localhost,5439 fran Windows)
 echo     - Databas:  lagerpro
-echo     - Användare: lager
-echo     - Lösenord: lager
+echo     - Anvaendare: lager
+echo     - Loesenord: lager
 echo =========================================================
 echo.
 pause

@@ -1,0 +1,5 @@
+=== TARGET CONTENT ===
+"  const [paypalCategoryFilter, setPaypalCategoryFilter] = useState('');\n  const [isSyncing, setIsSyncing] = useState(false);\n  const [targetSyncProject, setTargetSyncProject] = useState('Skor');\n  \n  // Webhook Simulation settings"
+
+=== REPLACEMENT CONTENT ===
+"  const [paypalCategoryFilter, setPaypalCategoryFilter] = useState('');\n  const [isSyncing, setIsSyncing] = useState(false);\n  const [targetSyncProject, setTargetSyncProject] = useState('Allmänt');\n  \n  // Webhook Simulation settings"

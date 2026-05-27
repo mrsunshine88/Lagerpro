@@ -14,7 +14,7 @@ describe('PaypalService - parseShoeName', () => {
       persist: jest.fn(),
       flush: jest.fn(),
     };
-    const mockEM = {
+    const mockEM: any = {
       findOne: jest.fn(),
       persist: jest.fn(),
       flush: jest.fn(),

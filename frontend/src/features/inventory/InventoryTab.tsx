@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { Html5Qrcode } from 'html5-qrcode';
 import {
   LayoutGrid,
   PackageSearch,
@@ -56,7 +57,103 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
   const [productName, setProductName] = useState('');
   const [productCategory, setProductCategory] = useState('Skor');
   const [productDescription, setProductDescription] = useState('');
+  const [productVariantLabel1, setProductVariantLabel1] = useState('Storlek');
+  const [productVariantLabel2, setProductVariantLabel2] = useState('Färg');
+  const [productDiscountPercent, setProductDiscountPercent] = useState<number | ''>('');
   const [productVariants, setProductVariants] = useState<Partial<Variant>[]>([]);
+  const [activeDiscount, setActiveDiscount] = useState<number>(0);
+
+  // Camera scanning states
+  const [cameraScanModalOpen, setCameraScanModalOpen] = useState(false);
+  const [activeVariantScanIndex, setActiveVariantScanIndex] = useState<number | null>(null);
+  const [cameraScanError, setCameraScanError] = useState('');
+
+  const startCameraScanner = (idx: number) => {
+    setActiveVariantScanIndex(idx);
+    setCameraScanModalOpen(true);
+    setCameraScanError('');
+  };
+
+  useEffect(() => {
+    let html5Qrcode: Html5Qrcode | null = null;
+    if (cameraScanModalOpen && activeVariantScanIndex !== null) {
+      const timer = setTimeout(() => {
+        html5Qrcode = new Html5Qrcode('scanner-reader');
+        const config = { fps: 15, qrbox: { width: 280, height: 160 } };
+
+        html5Qrcode.start(
+          { facingMode: 'environment' },
+          config,
+          (decodedText) => {
+            // Play Beep sound
+            try {
+              const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(1000, ctx.currentTime);
+              gain.gain.setValueAtTime(0.08, ctx.currentTime);
+              gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.12);
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.start();
+              osc.stop(ctx.currentTime + 0.12);
+            } catch (err) { }
+
+            const c = [...productVariants];
+            c[activeVariantScanIndex].sku = decodedText.trim();
+            setProductVariants(c);
+
+            if (html5Qrcode) {
+              html5Qrcode.stop().then(() => {
+                setCameraScanModalOpen(false);
+                setActiveVariantScanIndex(null);
+              }).catch(() => {
+                setCameraScanModalOpen(false);
+                setActiveVariantScanIndex(null);
+              });
+            }
+          },
+          () => { } // error callback
+        ).catch((err) => {
+          setCameraScanError('Kunde inte starta kameran. Kontrollera att du har gett kamerabehörighet och använder en säker anslutning (HTTPS).');
+        });
+      }, 300);
+
+      return () => {
+        clearTimeout(timer);
+        if (html5Qrcode && html5Qrcode.isScanning) {
+          html5Qrcode.stop().catch((e) => console.error('Error stopping scanner', e));
+        }
+      };
+    }
+  }, [cameraScanModalOpen, activeVariantScanIndex]);
+
+  // Fetch discount for a category and apply to all variant selling prices
+  const fetchAndApplyDiscount = async (category: string, variants?: Partial<Variant>[]) => {
+    try {
+      const res = await axios.get(`${apiBaseUrl}/api/projects/discount?project=${encodeURIComponent(category)}`, getAxiosConfig());
+      const discount: number = res.data.discount_percent || 0;
+      setActiveDiscount(discount);
+      
+      const currentVariants = variants ?? productVariants;
+      // When category discount changes, we only apply it if there is NO product discount overriding it.
+      // But actually, we don't know the exact order of states updating here. 
+      // It's safer to just set the activeDiscount, and the product variants will recalculate based on it.
+      // We need the current productDiscountPercent. It might be stale here, so we use a functional update if we wanted to be perfectly safe, but since this is called on category change, we can read it.
+      const appliedDiscount = (productDiscountPercent !== '' && productDiscountPercent > 0) ? productDiscountPercent : discount;
+      
+      if (currentVariants.length > 0) {
+        setProductVariants(currentVariants.map(v => {
+          const orig = v.original_price || 0;
+          return { ...v, selling_price: orig > 0 ? Math.round(orig * (1 - appliedDiscount / 100)) : 0 };
+        }));
+      }
+    } catch {
+      setActiveDiscount(0);
+    }
+  };
+
 
   // Excel Import Modal
   const [excelModalOpen, setExcelModalOpen] = useState(false);
@@ -69,8 +166,11 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
   const [scanSkuInput, setScanSkuInput] = useState('');
   const [scanMessage, setScanMessage] = useState('');
 
-  // Categories list
-  const categoriesList = Array.from(new Set(products.map((p) => p.category)));
+  // Categories list – deduplicate projectsList and existing product categories
+  const categoriesList = Array.from(new Set([
+    ...projectsList,
+    ...products.map((p) => p.category)
+  ]));
 
   // Filtered Products for Inventory Tab
   const filteredProducts = products.filter((p) => {
@@ -129,6 +229,9 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
       name: productName.trim(),
       category: productCategory,
       description: productDescription,
+      discountPercent: productDiscountPercent === '' ? null : productDiscountPercent,
+      variantLabel1: productVariantLabel1,
+      variantLabel2: productVariantLabel2,
       variants: productVariants
     };
 
@@ -240,15 +343,17 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
             <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
             <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Sök på modell, kategori, färg, storlek eller SKU..." style={{ width: '100%', padding: '10px 12px 10px 40px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 'var(--radius-sm)' }} />
           </div>
-          
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="custom-select" style={{ minWidth: 200, height: 42 }}>
-              <option value="all">Alla kategorier/Projekt</option>
+              {(userProfile?.role === 'admin' || userProfile?.allowed_projects === 'all' || categoriesList.length > 1) && (
+                <option value="all">Alla kategorier/Projekt</option>
+              )}
               {categoriesList.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>
-            
+
             <label className="toggle-switch-container" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-light)', padding: '8px 12px', borderRadius: 'var(--radius-sm)' }}>
               <input type="checkbox" checked={hideOutOfStock} onChange={(e) => setHideOutOfStock(e.target.checked)} style={{ accentColor: 'var(--color-primary)' }} />
               <span>Visa endast i lager (Göm slut)</span>
@@ -306,6 +411,9 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
                           setProductName(p.name);
                           setProductCategory(p.category);
                           setProductDescription(p.description || '');
+                          setProductDiscountPercent(p.discount_percent ?? '');
+                          setProductVariantLabel1(p.variantLabel1 || 'Storlek');
+                          setProductVariantLabel2(p.variantLabel2 || 'Färg');
                           setProductVariants(p.variants);
                           setProductModalOpen(true);
                         }}
@@ -332,24 +440,42 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
                 </div>
                 {p.description && <p className="product-desc">{p.description}</p>}
 
-                <div className="variants-section">
-                  <div className="variants-list">
+                <div className="variants-section" style={{ padding: '0 15px 15px 15px' }}>
+                  <div className="variants-list" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {p.variants.map((v) => (
-                      <div key={v.id} className="variant-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderBottom: '1px solid var(--border-light)' }}>
-                        <div style={{ display: 'flex', gap: 8, fontSize: '0.8rem' }}>
-                          <span style={{ fontWeight: 600 }}>Storlek: {v.size}</span>
-                          {v.color && <span style={{ color: 'var(--text-secondary)' }}>Färg: {v.color}</span>}
-                          <span className="val-muted" style={{ fontSize: '0.7rem' }}>SKU: {v.sku}</span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <button onClick={async () => { await axios.post(`${apiBaseUrl}/api/variants/${v.id}/stock`, { change: -1 }, getAxiosConfig()); fetchProducts(); }} className="btn btn-ghost btn-xs" style={{ minWidth: 20, padding: 2 }}>-</button>
-                            <strong style={{ minWidth: 30, textAlign: 'center', fontSize: '0.85rem' }}>{v.stock} st</strong>
-                            <button onClick={async () => { await axios.post(`${apiBaseUrl}/api/variants/${v.id}/stock`, { change: 1 }, getAxiosConfig()); fetchProducts(); }} className="btn btn-ghost btn-xs" style={{ minWidth: 20, padding: 2 }}>+</button>
+                      <div key={v.id} className="variant-row" style={{ padding: '8px 10px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+
+                        <div className="variant-details-wrapper" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>{p.variantLabel1 || 'Storlek'}:</span>
+                            <span className="variant-size" style={{ fontSize: '0.9rem' }}>{v.size}</span>
                           </div>
-                          <span style={{ fontWeight: 700, color: 'var(--color-success)', fontSize: '0.85rem' }}>{v.selling_price} kr</span>
-                          <button onClick={() => { setQrVariant(v); setQrModalOpen(true); }} className="btn btn-ghost btn-icon btn-xs" title="Visa QR"><Eye style={{ width: 14, height: 14 }} /></button>
+                          {v.color && (
+                            <span className="variant-color" style={{ color: 'var(--color-primary)', fontWeight: 600, padding: '2px 6px', fontSize: '0.75rem' }}>{v.color}</span>
+                          )}
                         </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end', flex: '1 1 auto' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: 'rgba(0,0,0,0.2)', borderRadius: 6, padding: '4px 10px' }}>
+                            <strong style={{ minWidth: 20, textAlign: 'center', fontSize: '0.85rem' }}>{v.stock} st</strong>
+                          </div>
+
+                          <div style={{ textAlign: 'right' }}>
+                            {v.original_price && v.original_price > v.selling_price ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                <span style={{ fontSize: '0.65rem', textDecoration: 'line-through', color: 'var(--text-muted)' }}>{v.original_price} kr</span>
+                                <strong style={{ color: 'var(--color-success)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>{v.selling_price} kr</strong>
+                              </div>
+                            ) : (
+                              <strong style={{ color: '#38bdf8', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>{v.selling_price} kr</strong>
+                            )}
+                          </div>
+
+                          <button onClick={() => { setQrVariant(v); setQrModalOpen(true); }} className="btn btn-ghost btn-icon btn-xs" title="Visa streckkod" style={{ padding: 4 }}>
+                            <Eye style={{ width: 14, height: 14, color: 'var(--text-muted)' }} />
+                          </button>
+                        </div>
+
                       </div>
                     ))}
                   </div>
@@ -382,15 +508,12 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
                   <label>Produktnamn *</label>
                   <input type="text" value={productName} onChange={(e) => setProductName(e.target.value)} required placeholder="T.ex. Adidas Ultraboost..." style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
                 </div>
-                
+
                 <div className="settings-grid-2col">
                   <div className="input-container">
                     <label>Kategori / Projekt *</label>
                     <select value={productCategory} onChange={(e) => setProductCategory(e.target.value)} className="custom-select" style={{ width: '100%', height: 42 }}>
-                      <option value="Skor">Skor</option>
-                      <option value="Krukor">Krukor</option>
-                      <option value="Utemöbler">Utemöbler</option>
-                      {projectsList.map((p) => (
+                      {categoriesList.map((p) => (
                         <option key={p} value={p}>{p}</option>
                       ))}
                     </select>
@@ -401,27 +524,95 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
                   </div>
                 </div>
 
+                <div className="input-container" style={{ marginTop: 12 }}>
+                  <label>Rabatt (%) på denna produkt</label>
+                  <input type="number" value={productDiscountPercent} onChange={(e) => {
+                    const newPct = e.target.value === '' ? '' : parseFloat(e.target.value);
+                    setProductDiscountPercent(newPct);
+                    const appliedDiscount = (newPct !== '' && newPct > 0) ? newPct : activeDiscount;
+                    setProductVariants(productVariants.map(v => {
+                      const orig = v.original_price || 0;
+                      return { ...v, selling_price: orig > 0 ? Math.round(orig * (1 - appliedDiscount / 100)) : 0 };
+                    }));
+                  }} placeholder="T.ex. 20 (frivilligt)" style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                </div>
+
                 <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: 15, marginTop: 15 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <h4 style={{ margin: 0 }}>Varianter &amp; Storlekar</h4>
-                    <button
-                      type="button"
-                      onClick={() => setProductVariants([...productVariants, { size: '', color: '', stock: 1, purchase_price: 0, selling_price: 0 }])}
-                      className="btn btn-secondary btn-xs"
-                    >
-                      + Lägg till variant
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
+                      <h4 style={{ margin: 0 }}>Varianter &amp; Storlekar</h4>
+                      <button
+                        type="button"
+                        onClick={() => setProductVariants([...productVariants, { size: '', color: '', stock: 1, purchase_price: 0, selling_price: 0 }])}
+                        className="btn btn-secondary btn-xs"
+                      >
+                        + Lägg till variant
+                      </button>
+                    </div>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <select value={productVariantLabel1} onChange={(e) => setProductVariantLabel1(e.target.value)} className="custom-select" style={{ height: 28, fontSize: '0.8rem', padding: '0 10px' }}>
+                        <option value="Storlek">Storlek</option>
+                        <option value="Mått">Mått (L x B x H)</option>
+                        <option value="Vikt">Vikt</option>
+                        <option value="Volym">Volym</option>
+                        <option value="Material">Material</option>
+                        <option value="Variant">Variant</option>
+                      </select>
+                      <select value={productVariantLabel2} onChange={(e) => setProductVariantLabel2(e.target.value)} className="custom-select" style={{ height: 28, fontSize: '0.8rem', padding: '0 10px' }}>
+                        <option value="Färg">Färg</option>
+                        <option value="Mönster">Mönster</option>
+                        <option value="Utförande">Utförande</option>
+                        <option value="Material">Material</option>
+                      </select>
+                    </div>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
                     {productVariants.map((v, idx) => (
-                      <div key={idx} className="variant-edit-row-grid">
-                        <input type="text" placeholder="Storlek" value={v.size || ''} onChange={(e) => { const c = [...productVariants]; c[idx].size = e.target.value; setProductVariants(c); }} required style={{ padding: 6, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
-                        <input type="text" placeholder="Färg" value={v.color || ''} onChange={(e) => { const c = [...productVariants]; c[idx].color = e.target.value; setProductVariants(c); }} style={{ padding: 6, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
-                        <input type="number" placeholder="Lager" value={v.stock ?? 0} onChange={(e) => { const c = [...productVariants]; c[idx].stock = parseInt(e.target.value) || 0; setProductVariants(c); }} required style={{ padding: 6, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
-                        <input type="number" placeholder="Inköpspris" value={v.purchase_price ?? 0} onChange={(e) => { const c = [...productVariants]; c[idx].purchase_price = parseFloat(e.target.value) || 0; setProductVariants(c); }} required style={{ padding: 6, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
-                        <input type="number" placeholder="Säljpris" value={v.selling_price ?? 0} onChange={(e) => { const c = [...productVariants]; c[idx].selling_price = parseFloat(e.target.value) || 0; setProductVariants(c); }} required style={{ padding: 6, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
-                        <button type="button" onClick={() => setProductVariants(productVariants.filter((_, i) => i !== idx))} className="btn btn-ghost btn-xs" style={{ color: 'var(--color-danger)' }}><Trash2 style={{ width: 16, height: 16 }} /></button>
+                      <div key={idx} style={{ background: 'rgba(255,255,255,0.03)', padding: 15, borderRadius: 8, border: '1px solid var(--border-light)', position: 'relative' }}>
+                        <button type="button" onClick={() => setProductVariants(productVariants.filter((_, i) => i !== idx))} title="Ta bort variant" style={{ position: 'absolute', top: 10, right: 10, background: 'transparent', border: 'none', color: 'var(--color-danger)', cursor: 'pointer' }}>
+                          <Trash2 size={18} />
+                        </button>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12, paddingRight: 30 }}>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>{productVariantLabel1 || 'Storlek'}</label>
+                            <input type="text" placeholder="..." value={v.size || ''} onChange={(e) => { const c = [...productVariants]; c[idx].size = e.target.value; setProductVariants(c); }} required style={{ width: '100%', padding: '6px 10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>{productVariantLabel2 || 'Färg'}</label>
+                            <input type="text" placeholder="..." value={v.color || ''} onChange={(e) => { const c = [...productVariants]; c[idx].color = e.target.value; setProductVariants(c); }} style={{ width: '100%', padding: '6px 10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Lager</label>
+                            <input type="number" placeholder="0" value={v.stock ?? 0} onChange={(e) => { const c = [...productVariants]; c[idx].stock = parseInt(e.target.value) || 0; setProductVariants(c); }} required style={{ width: '100%', padding: '6px 10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Inköpspris (kr)</label>
+                            <input type="number" placeholder="0" value={v.purchase_price ?? 0} onChange={(e) => { const c = [...productVariants]; c[idx].purchase_price = parseFloat(e.target.value) || 0; setProductVariants(c); }} required style={{ width: '100%', padding: '6px 10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Säljpris (kr)</label>
+                            <input type="number" placeholder="0" value={v.selling_price ?? 0} onChange={(e) => { const c = [...productVariants]; c[idx].selling_price = parseFloat(e.target.value) || 0; setProductVariants(c); }} required style={{ width: '100%', padding: '6px 10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Ord. pris (kr)</label>
+                            <input type="number" placeholder="Valfritt" value={v.original_price || ''} onChange={(e) => { const c = [...productVariants]; c[idx].original_price = e.target.value ? parseFloat(e.target.value) : undefined; setProductVariants(c); }} style={{ width: '100%', padding: '6px 10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Streckkod / SKU (Lämna tom för auto)</label>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <input type="text" placeholder="Streckkod/SKU..." value={v.sku || ''} onChange={(e) => { const c = [...productVariants]; c[idx].sku = e.target.value; setProductVariants(c); }} style={{ flex: 1, padding: '6px 10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                            <button type="button" onClick={() => startCameraScanner(idx)} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 15px', height: 34 }}>
+                              <ScanLine size={16} /> <span className="hide-mobile">Skanna</span>
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -540,6 +731,54 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
                   {scanMessage}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ==================== CAMERA BARCODE SCANNER MODAL ==================== */}
+      {cameraScanModalOpen && (
+        <div className="modal-overlay" style={{ zIndex: 99999 }}>
+          <div className="modal-card glass-modal modal-sm" style={{ maxWidth: 450, padding: 25, position: 'relative' }}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+              <h2>Skanna streckkod/SKU</h2>
+              <button className="btn-close" onClick={() => { setCameraScanModalOpen(false); setActiveVariantScanIndex(null); }}><X /></button>
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '10px 15px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)', marginBottom: 20, textAlign: 'center', width: '100%' }}>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                  Håll streckkoden framför kameran för att skanna in den till varianten.
+                </p>
+              </div>
+
+              {cameraScanError && (
+                <div style={{ margin: '0 0 15px 0', padding: 12, background: 'rgba(239,68,68,0.12)', border: '1px solid var(--color-danger)', borderRadius: 8, color: '#f87171', fontSize: '0.8rem', textAlign: 'center', lineHeight: 1.4 }}>
+                  {cameraScanError}
+                </div>
+              )}
+
+              {/* Viewport for camera with a scanner laser effect */}
+              <div style={{ position: 'relative', width: '100%', height: 260, background: 'black', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '2px solid rgba(255,255,255,0.1)' }}>
+                <div id="scanner-reader" style={{ width: '100%', height: '100%' }}></div>
+
+                {/* Visual Scanner Overlay */}
+                <div style={{ position: 'absolute', inset: 0, border: '30px solid rgba(0,0,0,0.5)', pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {/* Pulse Frame */}
+                  <div style={{ width: '100%', height: '100%', border: '2px solid var(--color-primary)', boxShadow: '0 0 15px rgba(236,72,153,0.3)', borderRadius: 4, position: 'relative' }}>
+                    {/* Laser line animation */}
+                    <div className="scanner-laser-line" style={{ position: 'absolute', top: '50%', left: 0, right: 0, height: 2, background: '#ec4899', boxShadow: '0 0 8px #ec4899' }}></div>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => { setCameraScanModalOpen(false); setActiveVariantScanIndex(null); }}
+                className="btn btn-ghost btn-full"
+                style={{ marginTop: 20 }}
+              >
+                Avbryt skanning
+              </button>
             </div>
           </div>
         </div>

@@ -36,7 +36,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
 
   const handleUndoSale = async (transactionId: number, modelName: string, quantity: number) => {
     if (
-      confirm(
+      await confirm(
         `Är du säker på att du vill ångra denna försäljning för ${modelName}? Skorna (+${quantity} st) återförs till lagret och försäljningsstatistiken justeras.`
       )
     ) {
@@ -68,7 +68,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
           </div>
           <div className="stat-info">
             <h3>Bundet Kapital (Lagerkostnad)</h3>
-            <p>{analytics.stock_metrics.total_cost.toLocaleString('sv-SE')} kr</p>
+            <p>{Math.round(analytics.stock_metrics.total_cost).toLocaleString('sv-SE')} kr</p>
             <span>Baserat på genomsnittliga inköpspriser</span>
           </div>
         </div>
@@ -78,7 +78,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
           </div>
           <div className="stat-info">
             <h3>Lager Försäljningsvärde</h3>
-            <p>{analytics.stock_metrics.potential_sales.toLocaleString('sv-SE')} kr</p>
+            <p>{Math.round(analytics.stock_metrics.potential_sales).toLocaleString('sv-SE')} kr</p>
             <span>Vid 100% försäljning</span>
           </div>
         </div>
@@ -88,7 +88,7 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
           </div>
           <div className="stat-info">
             <h3>Potentiell Bruttovinst</h3>
-            <p>{analytics.stock_metrics.potential_profit.toLocaleString('sv-SE')} kr</p>
+            <p>{Math.round(analytics.stock_metrics.potential_profit).toLocaleString('sv-SE')} kr</p>
             <span>Lagersaldo vinstpotential</span>
           </div>
         </div>
@@ -108,15 +108,15 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
         <div className="be-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 20 }}>
           <div className="be-stat">
             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Totala Paketinköp (Investerat)</span>
-            <strong style={{ display: 'block', fontSize: '1.5rem', marginTop: 4 }}>{analytics.break_even.total_investment.toLocaleString('sv-SE')} kr</strong>
+            <strong style={{ display: 'block', fontSize: '1.5rem', marginTop: 4 }}>{Math.round(analytics.break_even.total_investment).toLocaleString('sv-SE')} kr</strong>
           </div>
           <div className="be-stat">
             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Ackumulerad Försäljning</span>
-            <strong style={{ display: 'block', fontSize: '1.5rem', marginTop: 4 }}>{analytics.break_even.total_revenue.toLocaleString('sv-SE')} kr</strong>
+            <strong style={{ display: 'block', fontSize: '1.5rem', marginTop: 4 }}>{Math.round(analytics.break_even.total_revenue).toLocaleString('sv-SE')} kr</strong>
           </div>
           <div className="be-stat highlight" style={{ background: 'rgba(255,255,255,0.02)', padding: 12, borderRadius: 6 }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Faktisk Nettovinst (Kassaflöde)</span>
-            <strong style={{ display: 'block', fontSize: '1.5rem', color: analytics.break_even.net_profit >= 0 ? 'var(--color-success)' : 'white', marginTop: 4 }}>{analytics.break_even.net_profit.toLocaleString('sv-SE')} kr</strong>
+            <strong style={{ display: 'block', fontSize: '1.5rem', color: analytics.break_even.net_profit >= 0 ? 'var(--color-success)' : 'white', marginTop: 4 }}>{Math.round(analytics.break_even.net_profit).toLocaleString('sv-SE')} kr</strong>
           </div>
         </div>
 
@@ -147,11 +147,11 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
           </div>
           {analytics.break_even.net_profit < 0 ? (
             <p style={{ margin: 0, fontSize: '0.85rem', color: '#fbbf24' }}>
-              Sälj för ytterligare <strong>{(-analytics.break_even.net_profit).toLocaleString('sv-SE')} kr</strong> för att nå break-even.
+              Sälj för ytterligare <strong>{Math.round(-analytics.break_even.net_profit).toLocaleString('sv-SE')} kr</strong> för att nå break-even.
             </p>
           ) : (
             <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--color-success)' }}>
-              Du har passerat break-even-gränsen med <strong>{analytics.break_even.net_profit.toLocaleString('sv-SE')} kr</strong> i ren nettovinst!
+              Du har passerat break-even-gränsen med <strong>{Math.round(analytics.break_even.net_profit).toLocaleString('sv-SE')} kr</strong> i ren nettovinst!
             </p>
           )}
         </div>
@@ -177,23 +177,23 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Kostnad i lager:</span>
-                  <span className="val-muted">{p.stock_cost.toLocaleString('sv-SE')} kr</span>
+                  <span className="val-muted">{Math.round(p.stock_cost).toLocaleString('sv-SE')} kr</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Total investering:</span>
-                  <span>{p.total_investment.toLocaleString('sv-SE')} kr</span>
+                  <span>{Math.round(p.total_investment).toLocaleString('sv-SE')} kr</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span>Ackumulerade intäkter:</span>
-                  <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>{p.total_revenue.toLocaleString('sv-SE')} kr</span>
+                  <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>{Math.round(p.total_revenue).toLocaleString('sv-SE')} kr</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-light)', paddingTop: 6, marginTop: 4 }}>
                   <span>Kassaflöde netto:</span>
-                  <strong style={{ color: p.net_profit >= 0 ? 'var(--color-success)' : '#f59e0b' }}>{p.net_profit.toLocaleString('sv-SE')} kr</strong>
+                  <strong style={{ color: p.net_profit >= 0 ? 'var(--color-success)' : '#f59e0b' }}>{Math.round(p.net_profit).toLocaleString('sv-SE')} kr</strong>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 4 }}>
                   <span>Beräknad sko-kostnad:</span>
-                  <span>{p.cost_per_shoe.toFixed(2)} kr/st</span>
+                  <span>{Math.round(p.cost_per_shoe).toLocaleString('sv-SE')} kr/st</span>
                 </div>
               </div>
             </div>
@@ -203,45 +203,47 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
       
       <section className="recent-sales-history">
         <h3 style={{ marginBottom: 12 }}>Senaste registrerade försäljningar</h3>
-        <div className="glass-card" style={{ padding: 0 }}>
-          <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border-light)' }}>
-                <th style={{ padding: '10px 15px' }}>Produkt</th>
-                <th style={{ padding: '10px 15px' }}>Storlek/Färg</th>
-                <th style={{ padding: '10px 15px' }}>Kategori</th>
-                <th style={{ padding: '10px 15px' }}>Antal</th>
-                <th style={{ padding: '10px 15px' }}>Pris st</th>
-                <th style={{ padding: '10px 15px' }}>Snittkostnad st</th>
-                <th style={{ padding: '10px 15px' }}>Vinst st</th>
-                <th style={{ padding: '10px 15px' }}>Datum</th>
-                <th style={{ padding: '10px 15px', textAlign: 'right' }}>Åtgärder</th>
-              </tr>
-            </thead>
-            <tbody>
-              {analytics.recent_sales.map((s, idx) => (
-                <tr key={idx} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                  <td style={{ padding: '10px 15px' }}><strong>{s.model_name}</strong></td>
-                  <td style={{ padding: '10px 15px' }}>St: {s.size} ({s.color || 'Uni'})</td>
-                  <td style={{ padding: '10px 15px' }}><span className="category-tag">{s.category}</span></td>
-                  <td style={{ padding: '10px 15px' }}>{s.quantity} st</td>
-                  <td style={{ padding: '10px 15px' }}><strong style={{ color: 'var(--color-success)' }}>{s.selling_price} kr</strong></td>
-                  <td style={{ padding: '10px 15px' }}>{s.purchase_price ? `${s.purchase_price.toFixed(1)} kr` : '0 kr'}</td>
-                  <td style={{ padding: '10px 15px' }}><strong style={{ color: s.selling_price - s.purchase_price >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>{(s.selling_price - s.purchase_price).toFixed(1)} kr</strong></td>
-                  <td style={{ padding: '10px 15px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{new Date(s.created_at).toLocaleString('sv-SE')}</td>
-                  <td style={{ padding: '10px 15px', textAlign: 'right' }}>
-                    <button
-                      onClick={() => handleUndoSale(s.id, s.model_name, s.quantity)}
-                      className="btn btn-ghost btn-xs"
-                      style={{ color: 'var(--color-danger)', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '2px 8px', borderRadius: 4 }}
-                    >
-                      Ångra köp
-                    </button>
-                  </td>
+        <div className="glass-card no-padding-mobile" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="table-container" style={{ overflowX: 'auto', width: '100%', display: 'block', WebkitOverflowScrolling: 'touch' }}>
+            <table className="custom-table" style={{ width: '100%', minWidth: '750px', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border-light)' }}>
+                  <th style={{ padding: '10px 15px' }}>Produkt</th>
+                  <th style={{ padding: '10px 15px' }}>Storlek/Färg</th>
+                  <th style={{ padding: '10px 15px' }}>Kategori</th>
+                  <th style={{ padding: '10px 15px' }}>Antal</th>
+                  <th style={{ padding: '10px 15px' }}>Pris st</th>
+                  <th style={{ padding: '10px 15px' }}>Snittkostnad st</th>
+                  <th style={{ padding: '10px 15px' }}>Vinst st</th>
+                  <th style={{ padding: '10px 15px' }}>Datum</th>
+                  <th style={{ padding: '10px 15px', textAlign: 'right' }}>Åtgärder</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {analytics.recent_sales.map((s, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    <td style={{ padding: '10px 15px' }}><strong>{s.model_name}</strong></td>
+                    <td style={{ padding: '10px 15px' }}>St: {s.size} ({s.color || 'Uni'})</td>
+                    <td style={{ padding: '10px 15px' }}><span className="category-tag">{s.category}</span></td>
+                    <td style={{ padding: '10px 15px' }}>{s.quantity} st</td>
+                    <td style={{ padding: '10px 15px' }}><strong style={{ color: 'var(--color-success)' }}>{Math.round(s.selling_price).toLocaleString('sv-SE')} kr</strong></td>
+                    <td style={{ padding: '10px 15px' }}>{s.purchase_price ? `${Math.round(s.purchase_price).toLocaleString('sv-SE')} kr` : '0 kr'}</td>
+                    <td style={{ padding: '10px 15px' }}><strong style={{ color: s.selling_price - s.purchase_price >= 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>{Math.round(s.selling_price - s.purchase_price).toLocaleString('sv-SE')} kr</strong></td>
+                    <td style={{ padding: '10px 15px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{new Date(s.created_at).toLocaleString('sv-SE')}</td>
+                    <td style={{ padding: '10px 15px', textAlign: 'right' }}>
+                      <button
+                        onClick={() => handleUndoSale(s.id, s.model_name, s.quantity)}
+                        className="btn btn-ghost btn-xs"
+                        style={{ color: 'var(--color-danger)', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '2px 8px', borderRadius: 4 }}
+                      >
+                        Ångra köp
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
     </div>

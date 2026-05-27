@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MikroOrmModule } from '@mikro-orm/nestjs';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import config from './mikro-orm.config.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
@@ -14,6 +16,10 @@ import { PaypalModule } from './paypal/paypal.module.js';
 
 @Module({
   imports: [
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), '..', 'static'),
+      serveRoot: '/static',
+    }),
     MikroOrmModule.forRoot(config),
     AuthModule,
     ProductsModule,

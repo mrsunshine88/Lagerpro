@@ -21,27 +21,29 @@ goto end
 
 :fullstack
 echo.
-if not exist .env (
-    echo ===================================================
-    echo       KONFIGURATION: POSTGRESQL DATABAS
-    echo ===================================================
-    echo.
-    echo Hittade ingen sparad databaskoppling (.env-fil).
-    echo För att köra fullstack-versionen med PostgreSQL behöver vi din anslutningssträng.
-    echo Du kan använda en lokal Postgres eller en molndatabas (t.ex. Supabase eller Neon.tech).
-    echo.
-    set /p db_url="Klistra in din PostgreSQL-anslutningssträng (DATABASE_URL): "
-    if not "%db_url%"=="" (
-        echo DATABASE_URL=%db_url%>.env
-        echo [OK] Databaskopplingen har sparats i filen .env!
-        echo.
-    ) else (
-        echo [VARNING] Ingen anslutningssträng angavs. Försöker med standard lokal Postgres...
-        echo.
-    )
-)
+if exist .env goto read_env
 
-:: Läs .env-filen ifall den finns
+echo ===================================================
+echo       KONFIGURATION: POSTGRESQL DATABAS
+echo ===================================================
+echo.
+echo Hittade ingen sparad databaskoppling (.env-fil).
+echo Foer att koera fullstack-versionen med PostgreSQL behoever vi din anslutningsstraeng.
+echo Du kan anvaenda en lokal Postgres eller en molndatabas (t.ex. Supabase eller Neon.tech).
+echo.
+set /p db_url="Klistra in din PostgreSQL-anslutningsstraeng (DATABASE_URL): "
+if "%db_url%"=="" goto no_db_url
+
+echo DATABASE_URL=%db_url%>.env
+echo [OK] Databaskopplingen har sparats i filen .env!
+echo.
+goto read_env
+
+:no_db_url
+echo [VARNING] Ingen anslutningsstraeng angavs. Foersoeker med standard lokal Postgres...
+echo.
+
+:read_env
 if exist .env (
     for /f "usebackq tokens=*" %%i in (`type .env ^| findstr /v "^#"`) do (
         set %%i
@@ -53,8 +55,8 @@ start "Lagerpro - Backend" cmd.exe /c "cd backend && npm run start:dev"
 echo [SYSTEM] Startar Vite Frontend (Port 5173)...
 start "Lagerpro - Frontend" cmd.exe /c "cd frontend && npm run dev -- --open"
 echo.
-echo [OK] Båda servrarna har startats i separata fönster!
-echo Skulle webbläsaren inte öppnas automatiskt, gå till: http://localhost:5173
+echo [OK] Bada servrarna har startats i separata foenster!
+echo Skulle webblaesaren inte oeppnas automatiskt, ga till: http://localhost:5173
 echo.
 pause
 goto end

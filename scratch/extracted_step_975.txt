@@ -1,0 +1,5 @@
+=== TARGET CONTENT ===
+"      {/* ==================== QR CODE MODAL ==================== */}\n      <QRModal\n        isOpen={qrModalOpen}\n        onClose={() => setQrModalOpen(false)}\n            {/* ==================== SETTINGS MODAL ==================== */}\n      {settingsModalOpen && ("
+
+=== REPLACEMENT CONTENT ===
+"      {/* ==================== QR CODE MODAL ==================== */}\n      <QRModal\n        isOpen={qrModalOpen}\n        onClose={() => setQrModalOpen(false)}\n        variant={qrVariant}\n        apiBaseUrl={API_BASE_URL}\n      />\n\n      {/* ==================== SETTINGS MODAL ==================== */}\n      {settingsModalOpen && ("

@@ -211,7 +211,6 @@ export class SwishService {
         if (booking.paymentStatus === 'paid') continue;
 
         booking.paymentStatus = 'paid';
-        booking.status = 'reserved'; // Keep reserved for pickup
 
         // Calculate discounted price
         const sellingPrice = Math.round(booking.variant.sellingPrice * (1.0 - booking.discountPercent / 100.0));

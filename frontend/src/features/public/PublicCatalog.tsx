@@ -13,14 +13,19 @@ import {
   MapPin,
   CalendarCheck,
   FileSpreadsheet,
-  Trash2
+  Trash2,
+  CalendarRange,
+  CreditCard,
+  Truck,
+  Printer,
+  Download
 } from 'lucide-react';
 import type { Product, Variant } from '../../types';
 
 interface PublicCatalogProps {
   publicProducts: any[];
   fetchPublicProducts: () => Promise<void>;
-  projectConfigs: Record<string, { checkout_mode: string; delivery_method: string; shipping_cost: number }>;
+  projectConfigs?: Record<string, { checkout_mode: string; delivery_method: string; shipping_cost: number }>;
   setLoginModalOpen: (open: boolean) => void;
   apiBaseUrl: string;
 }
@@ -28,7 +33,6 @@ interface PublicCatalogProps {
 export const PublicCatalog: React.FC<PublicCatalogProps> = ({
   publicProducts,
   fetchPublicProducts,
-  projectConfigs,
   setLoginModalOpen,
   apiBaseUrl,
 }) => {
@@ -47,6 +51,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
   const [cartDiscountError, setCartDiscountError] = useState('');
   const [cartDiscountFreeShipping, setCartDiscountFreeShipping] = useState(false);
   const [purchasedItems, setPurchasedItems] = useState<any[]>([]);
+  const [selectedPublicVariants, setSelectedPublicVariants] = useState<Record<number, number>>({});
 
   // --- STANDARD BOOKING MODAL states ---
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
@@ -68,6 +73,58 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
   const [checkoutDeliveryMethod, setCheckoutDeliveryMethod] = useState('pickup');
   const [checkoutShippingAddress, setCheckoutShippingAddress] = useState('');
   const [checkoutMessage, setCheckoutMessage] = useState('');
+  const [checkoutModeSelected, setCheckoutModeSelected] = useState<'booking' | 'ecommerce'>('ecommerce');
+
+  // --- LOCAL CART CONFIG: fetched fresh from server per project (never cached) ---
+  const [cartConfig, setCartConfig] = useState<{ checkout_mode: string; delivery_method: string; shipping_cost: number } | null>(null);
+
+  // When the cart's project changes, fetch the latest config from server
+  useEffect(() => {
+    const project = publicCart.length > 0 ? publicCart[0].product_category : null;
+    if (!project) {
+      setCartConfig(null);
+      return;
+    }
+    axios
+      .get(`${apiBaseUrl}/api/public/projects/config?project=${encodeURIComponent(project)}`)
+      .then((res) => {
+        setCartConfig(res.data);
+        // Apply delivery default
+        if (res.data.delivery_method === 'shipping') {
+          setCheckoutDeliveryMethod('shipping');
+        } else {
+          setCheckoutDeliveryMethod('pickup');
+        }
+        // Apply checkout mode default
+        if (res.data.checkout_mode === 'ecommerce') {
+          setCheckoutModeSelected('ecommerce');
+        } else {
+          setCheckoutModeSelected('booking');
+        }
+      })
+      .catch(() => {
+        setCartConfig({ checkout_mode: 'booking', delivery_method: 'pickup', shipping_cost: 0 });
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publicCart.length > 0 ? publicCart[0].product_category : null, apiBaseUrl]);
+
+  // Lock body scroll when cart modal is open
+  useEffect(() => {
+    if (cartModalOpen) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    };
+  }, [cartModalOpen]);
 
   // --- SWISH SIMULATOR states ---
   const [paymentStep, setPaymentStep] = useState<'idle' | 'swish_waiting' | 'swish_success' | 'swish_failed' | 'booking_success'>('idle');
@@ -81,8 +138,13 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
     new Set(publicProducts.flatMap((p) => p.variants.map((v: any) => v.size)).filter(Boolean))
   );
 
+  const isPlaceholderProduct = (p: any) => {
+    return p.name.startsWith('Startprodukt (') && p.description === 'Placeholder för nyskapat projekt.';
+  };
+
   // Filtered Public Products
   const filteredPublicProducts = publicProducts.filter((p) => {
+    if (isPlaceholderProduct(p)) return false;
     const matchesSearch =
       p.name.toLowerCase().includes(publicSearch.toLowerCase()) ||
       p.category.toLowerCase().includes(publicSearch.toLowerCase()) ||
@@ -153,14 +215,11 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
       return;
     }
 
-    const newConfig = projectConfigs[prodCat] || { checkout_mode: 'booking' };
-
     if (publicCart.length > 0) {
       const existingCat = publicCart[0].product_category;
-      const existingConfig = projectConfigs[existingCat] || { checkout_mode: 'booking' };
-      if (newConfig.checkout_mode !== existingConfig.checkout_mode) {
+      if (prodCat !== existingCat) {
         alert(
-          `Du kan inte blanda direktköp (näthandel) och butiksbokningar i samma varukorg. Vänligen slutför din befintliga bokning/order först!`
+          `Du kan inte blanda produkter från olika projekt i samma varukorg. Vänligen slutför din befintliga bokning/order först!`
         );
         return;
       }
@@ -280,11 +339,11 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
     e.preventDefault();
     if (publicCart.length === 0) return;
 
-    const cat = publicCart[0].product_category;
-    const config = projectConfigs[cat] || { checkout_mode: 'booking', delivery_method: 'pickup', shipping_cost: 0 };
+    const config = cartConfig || { checkout_mode: 'booking', delivery_method: 'pickup', shipping_cost: 0 };
 
-    const isEcom = config.checkout_mode === 'ecommerce';
-    const isShipping = isEcom && checkoutDeliveryMethod === 'shipping';
+    const isEcom = checkoutDeliveryMethod === 'shipping' || (config.checkout_mode === 'both' ? checkoutModeSelected === 'ecommerce' : config.checkout_mode === 'ecommerce');
+    const hasShipping = config.delivery_method === 'shipping' || config.delivery_method === 'shipping_pickup';
+    const isShipping = config.delivery_method === 'shipping' || (hasShipping && checkoutDeliveryMethod === 'shipping');
     const shippingCost = isShipping ? (cartDiscountValid && cartDiscountFreeShipping ? 0 : (config.shipping_cost || 0)) : 0;
 
     try {
@@ -350,6 +409,44 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
     }
   };
 
+  const loadHtml2Pdf = (): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      if ((window as any).html2pdf) {
+        resolve((window as any).html2pdf);
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      script.onload = () => resolve((window as any).html2pdf);
+      script.onerror = () => reject(new Error('Kunde inte ladda PDF-generatorn.'));
+      document.head.appendChild(script);
+    });
+  };
+
+  const downloadReceiptAsFile = async () => {
+    try {
+      const html2pdf = (await loadHtml2Pdf()) as any;
+      const element = document.getElementById('receipt-card-print');
+      if (!element) return;
+
+      const opt = {
+        margin:       [12, 12, 12, 12],
+        filename:     `kvitto-order-${createdBookingIds.join('-') || 'kvitto'}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { 
+          scale: 2.5, 
+          useCORS: true, 
+          backgroundColor: '#0b0f19'
+        },
+        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+
+      html2pdf().from(element).set(opt).save();
+    } catch (error) {
+      alert('Det gick inte att ladda ner kvittot som PDF. Kontrollera din internetanslutning och försök igen.');
+    }
+  };
+
   return (
     <div id="public-container">
       <header className="glass-header">
@@ -360,16 +457,38 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
           </div>
           <span className="badge" style={{ background: 'rgba(217, 70, 239, 0.15)', color: 'var(--color-accent)', border: '1px solid rgba(217, 70, 239, 0.3)', fontWeight: 700, marginLeft: 10, fontSize: '0.75rem', letterSpacing: 0.5 }}>KUNDPORTAL</span>
         </div>
-        <div className="header-right" style={{ display: 'flex', gap: 8 }}>
+        <div className="header-right" style={{ display: 'flex', gap: 8, alignItems: 'center', overflow: 'visible' }}>
           {publicCart.length > 0 && (
-            <button onClick={() => setCartModalOpen(true)} className="btn btn-primary" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6, background: 'var(--color-accent)', borderColor: 'var(--color-accent)' }}>
-              <ShoppingCart style={{ width: 14, height: 14 }} />
-              <span>Visa varukorg ({publicCart.length} par)</span>
-            </button>
+            <div style={{ position: 'relative', display: 'inline-flex' }}>
+              <button onClick={() => setCartModalOpen(true)} className="btn btn-primary" id="public-cart-btn" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6, background: 'var(--color-accent)', borderColor: 'var(--color-accent)', padding: '8px 14px' }}>
+                <ShoppingCart style={{ width: 16, height: 16 }} />
+                <span className="desktop-only">Visa varukorg</span>
+              </button>
+              <span style={{
+                position: 'absolute',
+                top: -8,
+                right: -8,
+                background: '#ef4444',
+                color: 'white',
+                fontSize: '0.65rem',
+                fontWeight: 800,
+                borderRadius: '50%',
+                minWidth: 20,
+                height: 20,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0 4px',
+                boxShadow: '0 2px 6px rgba(239,68,68,0.6)',
+                border: '2px solid var(--bg-primary)',
+                zIndex: 10,
+                pointerEvents: 'none'
+              }}>{publicCart.length}</span>
+            </div>
           )}
           <button onClick={() => setLoginModalOpen(true)} className="btn btn-ghost" style={{ border: '1px solid var(--border-light)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <LogIn style={{ width: 14, height: 14 }} />
-            <span>Personalinloggning</span>
+            <LogIn style={{ width: 16, height: 16 }} />
+            <span className="desktop-only">Personalinloggning</span>
           </button>
         </div>
       </header>
@@ -377,9 +496,9 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
       <main className="content-wrapper">
         <div className="welcome-banner glass-card" style={{ padding: 40, textAlign: 'center', marginBottom: 30, background: 'linear-gradient(135deg, rgba(217,70,239,0.05) 0%, rgba(139,92,246,0.05) 100%)', border: '1px solid var(--border-light)' }}>
           <Sparkles style={{ width: 48, height: 48, color: 'var(--color-accent)', marginBottom: 15 }} className="animate-float" />
-          <h2 style={{ fontSize: '2rem', margin: '0 0 10px 0', fontWeight: 800, letterSpacing: -0.5 }}>Butikens Bokningsportal</h2>
-          <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', margin: '0 auto', maxWidth: 600, lineHeight: 1.6 }}>
-            Hitta dina favoritprodukter, välj variant och reservera direkt online! Dina produkter läggs undan direkt i butiken. Du betalar och hämtar dem enkelt på plats. Ingen registrering eller konto krävs.
+          <h2 style={{ fontSize: '2rem', margin: '0 0 10px 0', fontWeight: 800, letterSpacing: -0.5 }}>Butikens Kundportal</h2>
+          <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', margin: '0 auto', maxWidth: 650, lineHeight: 1.6 }}>
+            Hitta dina favoritprodukter, välj din storlek och beställ enkelt direkt online! Beroende på projektets inställningar kan du välja att betala direkt med Swish och få det fraktat hem, eller boka för upphämtning i butik. Ingen registrering eller konto krävs.
           </p>
         </div>
 
@@ -435,32 +554,93 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                   </div>
                   {p.description && <p className="product-desc">{p.description}</p>}
                   
-                  <div className="variants-section">
-                    <h4>Tillgängliga storlekar &amp; färger:</h4>
-                    <div className="variants-list" style={{ maxHeight: 200, overflowY: 'auto' }}>
-                      {p.variants.filter((v: any) => v.stock > 0).map((v: any) => (
-                        <div key={v.id} className="variant-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid var(--border-light)' }}>
-                          <div style={{ display: 'flex', gap: 10 }}>
-                            <span style={{ fontWeight: 700 }}>Storlek: {v.size || 'U'}</span>
-                            <span style={{ color: 'var(--text-secondary)' }}>Färg: {v.color || 'Uni'}</span>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            {v.original_price > v.selling_price && (
-                              <span style={{ textDecoration: 'line-through', fontSize: '0.8rem', color: 'var(--color-danger)' }}>{v.original_price} kr</span>
+                  <div className="public-variants-section">
+                    <h4 style={{ marginBottom: 12, color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Välj storlek:</h4>
+                    <div className="variants-list" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 15 }}>
+                      {p.variants.map((v: any) => {
+                        const isSelected = selectedPublicVariants[p.id] === v.id;
+                        return (
+                          <button
+                            key={v.id}
+                            disabled={v.stock <= 0}
+                            onClick={() => setSelectedPublicVariants({ ...selectedPublicVariants, [p.id]: isSelected ? 0 : v.id })}
+                            style={{
+                              padding: '8px 12px',
+                              background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.03)',
+                              border: isSelected ? '1px solid var(--color-accent)' : '1px solid var(--border-light)',
+                              borderRadius: 8,
+                              color: v.stock <= 0 ? 'var(--text-muted)' : isSelected ? 'white' : 'var(--text-primary)',
+                              cursor: v.stock <= 0 ? 'not-allowed' : 'pointer',
+                              opacity: v.stock <= 0 ? 0.4 : 1,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              minWidth: 50,
+                              position: 'relative'
+                            }}
+                          >
+                            <span style={{ fontSize: '0.95rem', fontWeight: isSelected ? 700 : 500 }}>{v.size || 'U'}</span>
+                            {v.color && <span style={{ fontSize: '0.7rem', marginTop: 2 }}>{v.color}</span>}
+                            {v.stock <= 0 && (
+                              <div style={{ position: 'absolute', width: '100%', height: '1px', background: 'var(--text-muted)', top: '50%', transform: 'rotate(-25deg)' }}></div>
                             )}
-                            <span style={{ fontWeight: 800, color: 'var(--color-success)' }}>{v.selling_price} kr</span>
-                            <button
-                              onClick={() => {
-                                addToPublicCart(p.name, p.category, v);
-                              }}
-                              className="btn btn-primary btn-xs"
-                            >
-                              {projectConfigs[p.category]?.checkout_mode === 'ecommerce' ? 'Köp' : 'Boka'}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                          </button>
+                        );
+                      })}
                     </div>
+                    
+                    {(() => {
+                      const selectedId = selectedPublicVariants[p.id];
+                      const selectedVariant = p.variants.find((v: any) => v.id === selectedId);
+                      
+                      return (
+                        <div style={{ background: 'rgba(0,0,0,0.1)', padding: 15, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              {selectedVariant ? (
+                                <>
+                                  {selectedVariant.original_price && selectedVariant.original_price > selectedVariant.selling_price && (
+                                    <span style={{ fontSize: '0.75rem', textDecoration: 'line-through', color: 'var(--text-muted)' }}>{selectedVariant.original_price} kr</span>
+                                  )}
+                                  <strong style={{ color: selectedVariant.original_price && selectedVariant.original_price > selectedVariant.selling_price ? 'var(--color-success)' : '#38bdf8', fontSize: '1.2rem' }}>{selectedVariant.selling_price} kr</strong>
+                                </>
+                              ) : (
+                                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Välj en storlek ovan</span>
+                              )}
+                            </div>
+                            
+                            {selectedVariant && selectedVariant.stock > 0 && (
+                              <span style={{ 
+                                fontSize: '0.75rem', 
+                                fontWeight: 700, 
+                                color: selectedVariant.stock === 1 ? '#fbbf24' : '#8b5cf6',
+                                background: selectedVariant.stock === 1 ? 'rgba(245, 158, 11, 0.1)' : 'rgba(139, 92, 246, 0.1)',
+                                padding: '4px 10px',
+                                borderRadius: 20,
+                                border: selectedVariant.stock === 1 ? '1px solid rgba(245, 158, 11, 0.2)' : '1px solid rgba(139, 92, 246, 0.2)'
+                              }}>
+                                {selectedVariant.stock === 1 ? 'Endast 1 par kvar' : `${selectedVariant.stock} par i lager`}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <button
+                            disabled={!selectedVariant || selectedVariant.stock <= 0}
+                            onClick={() => {
+                              if (selectedVariant) {
+                                addToPublicCart(p.name, p.category, selectedVariant);
+                                setSelectedPublicVariants({ ...selectedPublicVariants, [p.id]: 0 }); // unselect
+                              }
+                            }}
+                            className="btn btn-primary btn-full"
+                            style={{ fontWeight: 700, padding: 12, display: 'flex', justifyContent: 'center', gap: 8, alignItems: 'center' }}
+                          >
+                            <ShoppingCart style={{ width: 18, height: 18 }} />
+                            <span>Lägg i varukorg</span>
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -516,7 +696,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                   <input type="tel" value={bookingPhone} onChange={(e) => setBookingPhone(e.target.value)} required placeholder="T.ex. 070-123 45 67" style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 15 }}>
+                <div className="settings-grid-2col" style={{ marginBottom: 15 }}>
                   <div className="input-container">
                     <label>Rabattkod (Frivillig)</label>
                     <input
@@ -622,14 +802,14 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
 
       {/* ==================== PUBLIC SHOPPING CART / CHECKOUT MODAL ==================== */}
       {cartModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-card glass-modal modal-md" style={{ maxWidth: 520 }}>
+        <div className="modal-overlay cart-modal-overlay">
+          <div className="modal-card glass-modal modal-md cart-modal-card" style={{ maxWidth: 520 }}>
             <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2>Varukorg &amp; Kassa</h2>
               <button className="btn-close" onClick={() => setCartModalOpen(false)}><X /></button>
             </div>
             
-            <div className="modal-body" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+            <div className="modal-body" style={{ maxHeight: '85vh', overflowY: 'auto', overflowX: 'hidden' }}>
               {paymentStep === 'swish_waiting' && (
                 <div style={{ textAlign: 'center', padding: '30px 10px' }}>
                   <div className="spinner" style={{ border: '4px solid rgba(16,185,129,0.1)', borderLeftColor: 'var(--color-success)', borderRadius: '50%', width: 50, height: 50, animation: 'spin 1s linear infinite', margin: '0 auto 20px auto' }}></div>
@@ -712,120 +892,190 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                     </p>
                   </div>
 
-                  {/* Digital Kvitto Card */}
-                  <div className="glass-panel" style={{ padding: 20, borderRadius: 8, background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', marginBottom: 20 }}>
-                    <div style={{ textAlign: 'center', borderBottom: '1px dashed var(--border-light)', paddingBottom: 15, marginBottom: 15 }}>
-                      <h4 style={{ margin: '0 0 4px 0', fontSize: '1.2rem', color: 'var(--color-primary)' }}>ORDERBEKRÄFTELSE</h4>
-                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                        Datum: {new Date().toLocaleString('sv-SE')}
-                      </span>
-                      <div style={{ marginTop: 8, fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-success)' }}>
-                        Ordernummer: {createdBookingIds.map((id) => `#${id}`).join(', ')}
-                      </div>
-                    </div>
-
-                    {/* Customer Info */}
-                    <div style={{ marginBottom: 15, fontSize: '0.85rem' }}>
-                      <h5 style={{ margin: '0 0 6px 0', color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: 0.5, textTransform: 'uppercase' }}>Kunduppgifter:</h5>
-                      <div><strong>Namn:</strong> {checkoutFirstName} {checkoutLastName}</div>
-                      <div><strong>Telefon:</strong> {checkoutPhone}</div>
-                    </div>
-
-                    {/* Purchased Items */}
-                    <div style={{ marginBottom: 15 }}>
-                      <h5 style={{ margin: '0 0 6px 0', color: 'var(--text-secondary)', fontSize: '0.75rem', letterSpacing: 0.5, textTransform: 'uppercase' }}>Beställda varor:</h5>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {purchasedItems.map((item, idx) => (
-                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 4 }}>
-                            <div style={{ flex: 1, marginRight: 12 }}>
-                              <span style={{ display: 'block', wordBreak: 'break-word', whiteSpace: 'normal' }}>{item.product_name}</span>
-                              <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2 }}>
-                                Storlek: {item.variant.size} | Färg: {item.variant.color || 'Uni'}
-                              </span>
-                            </div>
-                            <span style={{ fontWeight: 600 }}>{item.variant.selling_price} kr</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Delivery & Payment Info */}
-                    <div style={{ marginBottom: 15, padding: '10px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: 6, border: '1px solid var(--border-light)', fontSize: '0.85rem' }}>
-                      <div style={{ marginBottom: 6 }}>
-                        <strong>Leveranssätt:</strong>{' '}
-                        {checkoutDeliveryMethod === 'shipping' ? (
-                          <span style={{ color: '#60a5fa', fontWeight: 600 }}>PostNord Hemleverans</span>
-                        ) : (
-                          <span style={{ color: '#fbbf24', fontWeight: 600 }}>Hämtas i butik (Ramdala Krukor)</span>
-                        )}
-                      </div>
-                      
-                      {checkoutDeliveryMethod === 'shipping' && checkoutShippingAddress && (
-                        <div style={{ marginBottom: 6, color: 'var(--text-secondary)', fontSize: '0.8rem' }}>
-                          <strong>Mottagaradress:</strong> {checkoutShippingAddress}
-                        </div>
-                      )}
-
+                  {/* Professional PDF Receipt Card */}
+                  <div id="receipt-card-print" style={{
+                    background: '#ffffff',
+                    color: '#1a1a2e',
+                    borderRadius: 8,
+                    border: '1px solid #e2e8f0',
+                    marginBottom: 20,
+                    fontFamily: 'Georgia, serif',
+                    overflow: 'hidden'
+                  }}>
+                    {/* Header band */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+                      padding: '28px 30px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
                       <div>
-                        <strong>Betalsätt:</strong>{' '}
-                        {paymentStep === 'swish_success' ? (
-                          <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>✓ Swish (Betald online)</span>
-                        ) : (
-                          <span style={{ color: 'var(--text-secondary)' }}>Betalas i butik vid upphämtning</span>
-                        )}
+                        <div style={{ color: '#a78bfa', fontSize: '1.4rem', fontWeight: 900, letterSpacing: 1, fontFamily: 'Arial, sans-serif' }}>
+                          LAGER<span style={{ color: '#ffffff' }}>PRO</span>
+                        </div>
+                        <div style={{ color: '#94a3b8', fontSize: '0.75rem', marginTop: 4, fontFamily: 'Arial, sans-serif' }}>
+                          Orderbekräftelse
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ color: '#ffffff', fontSize: '1.5rem', fontWeight: 800, fontFamily: 'Arial, sans-serif' }}>
+                          {createdBookingIds.map((id) => `#${id}`).join(', ')}
+                        </div>
+                        <div style={{ color: '#94a3b8', fontSize: '0.75rem', marginTop: 2, fontFamily: 'Arial, sans-serif' }}>
+                          {new Date().toLocaleDateString('sv-SE', { year: 'numeric', month: 'long', day: 'numeric' })}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Price Spec */}
-                    {(() => {
-                      const originalTotal = purchasedItems.reduce((sum, item) => sum + item.variant.selling_price * item.quantity, 0);
-                      const discountAmount = cartDiscountValid ? Math.round(originalTotal * (cartDiscountPercent / 100)) : 0;
-                      
-                      const firstItem = purchasedItems[0] || {};
-                      const cat = firstItem.product_category;
-                      const config = projectConfigs[cat] || { shipping_cost: 0 };
-                      const hasFreeShipping = cartDiscountValid && cartDiscountFreeShipping;
-                      const shippingCost = checkoutDeliveryMethod === 'shipping' ? (hasFreeShipping ? 0 : config.shipping_cost || 0) : 0;
-                      const finalTotal = originalTotal - discountAmount + shippingCost;
+                    {/* Body */}
+                    <div style={{ padding: '28px 30px' }}>
 
-                      return (
-                        <div style={{ borderTop: '1px dashed var(--border-light)', paddingTop: 10, fontSize: '0.85rem' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <span style={{ color: 'var(--text-secondary)' }}>Produktsumma:</span>
-                            <span>{originalTotal} kr</span>
+                      {/* Status badge */}
+                      <div style={{ textAlign: 'center', marginBottom: 28 }}>
+                        <span style={{
+                          display: 'inline-block',
+                          background: paymentStep === 'swish_success' ? '#dcfce7' : '#fef3c7',
+                          color: paymentStep === 'swish_success' ? '#166534' : '#92400e',
+                          padding: '6px 20px',
+                          borderRadius: 50,
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          fontFamily: 'Arial, sans-serif',
+                          letterSpacing: 0.5
+                        }}>
+                          {paymentStep === 'swish_success' ? '✓ BETALD' : '⏳ BOKAD – BETALAS VID HÄMTNING'}
+                        </span>
+                      </div>
+
+                      {/* Two-column: customer + delivery */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
+                        {/* Customer info */}
+                        <div style={{ background: '#f8fafc', borderRadius: 6, padding: '16px 18px', border: '1px solid #e2e8f0' }}>
+                          <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', letterSpacing: 1, textTransform: 'uppercase', fontFamily: 'Arial, sans-serif', marginBottom: 10, borderBottom: '1px solid #e2e8f0', paddingBottom: 6 }}>
+                            Kunduppgifter
                           </div>
-                          {cartDiscountValid && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-success)', marginBottom: 4 }}>
-                              <span>Rabatt (-{cartDiscountPercent}%):</span>
-                              <span>-{discountAmount} kr</span>
-                            </div>
-                          )}
-                          {checkoutDeliveryMethod === 'shipping' && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa', marginBottom: 4 }}>
-                              <span>PostNord Frakt:</span>
-                              <span>{hasFreeShipping ? '0 kr (Fri frakt)' : `+${shippingCost} kr`}</span>
-                            </div>
-                          )}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-light)', paddingTop: 6, marginTop: 6, fontSize: '1rem', fontWeight: 800 }}>
-                            <span>Totalt:</span>
-                            <span style={{ color: 'var(--color-success)' }}>{finalTotal} kr</span>
+                          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#1e293b', fontFamily: 'Arial, sans-serif', marginBottom: 4 }}>
+                            {checkoutFirstName} {checkoutLastName}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#475569', fontFamily: 'Arial, sans-serif' }}>
+                            📞 {checkoutPhone}
                           </div>
                         </div>
-                      );
-                    })()}
+
+                        {/* Delivery info */}
+                        <div style={{ background: '#f8fafc', borderRadius: 6, padding: '16px 18px', border: '1px solid #e2e8f0' }}>
+                          <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', letterSpacing: 1, textTransform: 'uppercase', fontFamily: 'Arial, sans-serif', marginBottom: 10, borderBottom: '1px solid #e2e8f0', paddingBottom: 6 }}>
+                            Leverans & Betalning
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#1e293b', fontFamily: 'Arial, sans-serif', marginBottom: 4 }}>
+                            <strong>Leverans:</strong>{' '}
+                            {checkoutDeliveryMethod === 'shipping' ? 'PostNord Hemleverans' : 'Hämtas i butik'}
+                          </div>
+                          {checkoutDeliveryMethod === 'shipping' && checkoutShippingAddress && (
+                            <div style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'Arial, sans-serif', marginBottom: 4 }}>
+                              {checkoutShippingAddress}
+                            </div>
+                          )}
+                          <div style={{ fontSize: '0.8rem', color: '#1e293b', fontFamily: 'Arial, sans-serif' }}>
+                            <strong>Betalsätt:</strong>{' '}
+                            {paymentStep === 'swish_success' ? 'Swish – Betald online' : 'Betalas i butik'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Products table */}
+                      <div style={{ marginBottom: 24 }}>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#64748b', letterSpacing: 1, textTransform: 'uppercase', fontFamily: 'Arial, sans-serif', marginBottom: 10 }}>
+                          Beställda varor
+                        </div>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', fontFamily: 'Arial, sans-serif' }}>
+                          <thead>
+                            <tr style={{ background: '#f1f5f9' }}>
+                              <th style={{ padding: '8px 12px', textAlign: 'left', color: '#475569', fontWeight: 600, fontSize: '0.75rem' }}>Produkt</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'center', color: '#475569', fontWeight: 600, fontSize: '0.75rem' }}>Storlek / Färg</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'center', color: '#475569', fontWeight: 600, fontSize: '0.75rem' }}>Antal</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'right', color: '#475569', fontWeight: 600, fontSize: '0.75rem' }}>Pris</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {purchasedItems.map((item, idx) => (
+                              <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0', background: idx % 2 === 0 ? '#ffffff' : '#fafafa' }}>
+                                <td style={{ padding: '10px 12px', color: '#1e293b', fontWeight: 600 }}>{item.product_name}</td>
+                                <td style={{ padding: '10px 12px', textAlign: 'center', color: '#475569' }}>
+                                  {item.variant.size} / {item.variant.color || 'Uni'}
+                                </td>
+                                <td style={{ padding: '10px 12px', textAlign: 'center', color: '#475569' }}>{item.quantity || 1} st</td>
+                                <td style={{ padding: '10px 12px', textAlign: 'right', color: '#1e293b', fontWeight: 700 }}>{item.variant.selling_price} kr</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Price summary */}
+                      {(() => {
+                        const originalTotal = purchasedItems.reduce((sum, item) => sum + item.variant.selling_price * item.quantity, 0);
+                        const discountAmount = cartDiscountValid ? Math.round(originalTotal * (cartDiscountPercent / 100)) : 0;
+                        const config = cartConfig || { shipping_cost: 0 };
+                        const hasFreeShipping = cartDiscountValid && cartDiscountFreeShipping;
+                        const shippingCost = checkoutDeliveryMethod === 'shipping' ? (hasFreeShipping ? 0 : (config as any).shipping_cost || 0) : 0;
+                        const finalTotal = originalTotal - discountAmount + shippingCost;
+                        return (
+                          <div style={{ maxWidth: 280, marginLeft: 'auto', background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0', padding: '14px 18px', fontFamily: 'Arial, sans-serif', fontSize: '0.85rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#475569' }}>
+                              <span>Produktsumma</span>
+                              <span>{originalTotal} kr</span>
+                            </div>
+                            {cartDiscountValid && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#16a34a' }}>
+                                <span>Rabatt (-{cartDiscountPercent}%)</span>
+                                <span>−{discountAmount} kr</span>
+                              </div>
+                            )}
+                            {checkoutDeliveryMethod === 'shipping' && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, color: '#2563eb' }}>
+                                <span>Frakt</span>
+                                <span>{hasFreeShipping ? 'Gratis' : `+${shippingCost} kr`}</span>
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #1e293b', paddingTop: 10, marginTop: 6, fontSize: '1.05rem', fontWeight: 800, color: '#1e293b' }}>
+                              <span>TOTALT</span>
+                              <span>{finalTotal} kr</span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Footer note */}
+                      <div style={{ marginTop: 28, paddingTop: 16, borderTop: '1px solid #e2e8f0', textAlign: 'center', color: '#94a3b8', fontSize: '0.72rem', fontFamily: 'Arial, sans-serif' }}>
+                        Tack för ditt köp! · Spara detta kvitto som bevis på din beställning · Ordernummer {createdBookingIds.map((id) => `#${id}`).join(', ')}
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Actions */}
+
                   <div className="no-print" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <button
-                      type="button"
-                      onClick={() => window.print()}
-                      className="btn btn-primary btn-full"
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px' }}
-                    >
-                      <FileSpreadsheet style={{ width: 16, height: 16 }} />
-                      <span>Skriv ut / Spara PDF</span>
-                    </button>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <button
+                        type="button"
+                        onClick={() => window.print()}
+                        className="btn btn-primary"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px', fontSize: '0.85rem' }}
+                      >
+                        <Printer style={{ width: 16, height: 16 }} />
+                        <span>Skriv ut kvitto</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={downloadReceiptAsFile}
+                        className="btn btn-secondary"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px', fontSize: '0.85rem', borderColor: 'var(--color-primary)', color: 'white' }}
+                      >
+                        <Download style={{ width: 16, height: 16 }} />
+                        <span>Ladda ner kvitto</span>
+                      </button>
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
@@ -875,17 +1125,16 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                       <button onClick={() => setCartModalOpen(false)} className="btn btn-primary">Tillbaka till butiken</button>
                     </div>
                   ) : (() => {
-                    const firstItem = publicCart[0];
-                    const cat = firstItem.product_category;
-                    const config = projectConfigs[cat] || { checkout_mode: 'booking', delivery_method: 'pickup', shipping_cost: 0 };
+                    const config = cartConfig || { checkout_mode: 'booking', delivery_method: 'pickup', shipping_cost: 0 };
                     
-                    const isEcom = config.checkout_mode === 'ecommerce';
-                    const hasShipping = config.delivery_method === 'shipping_pickup';
+                    const isEcom = checkoutDeliveryMethod === 'shipping' || (config.checkout_mode === 'both' ? checkoutModeSelected === 'ecommerce' : config.checkout_mode === 'ecommerce');
+                    const hasShipping = config.delivery_method === 'shipping' || config.delivery_method === 'shipping_pickup';
+                    const isShipping = config.delivery_method === 'shipping' || (hasShipping && checkoutDeliveryMethod === 'shipping');
                     
                     const originalTotal = publicCart.reduce((sum, item) => sum + item.variant.selling_price * item.quantity, 0);
                     const discountAmount = cartDiscountValid ? Math.round(originalTotal * (cartDiscountPercent / 100)) : 0;
                     const isFreeShippingApplied = cartDiscountValid && cartDiscountFreeShipping;
-                    const shippingCost = isEcom && hasShipping && checkoutDeliveryMethod === 'shipping' ? (isFreeShippingApplied ? 0 : config.shipping_cost || 0) : 0;
+                    const shippingCost = isShipping ? (isFreeShippingApplied ? 0 : config.shipping_cost || 0) : 0;
                     const finalTotal = originalTotal - discountAmount + shippingCost;
 
                     return (
@@ -919,7 +1168,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                         </div>
 
                         {/* Customer Form */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 12 }}>
+                        <div className="settings-grid-2col" style={{ marginBottom: 12 }}>
                           <div className="input-container">
                             <label>Förnamn *</label>
                             <input
@@ -985,33 +1234,107 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                           )}
                         </div>
 
-                        {/* Delivery options if ecommerce & shipping option available */}
-                        {isEcom && hasShipping && (
+                        {/* 1. Leveransmetod Selector */}
+                        {config.delivery_method === 'shipping_pickup' ? (
                           <div style={{ marginBottom: 15 }}>
                             <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Leveransmetod *</label>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                            <div className="settings-grid-2col" style={{ gap: 10 }}>
                               <button
                                 type="button"
                                 onClick={() => setCheckoutDeliveryMethod('pickup')}
                                 className={`btn btn-sm ${checkoutDeliveryMethod === 'pickup' ? 'btn-primary' : 'btn-secondary'}`}
-                                style={{ padding: 10, fontSize: '0.85rem' }}
+                                style={{ padding: 10, fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                               >
-                                Hämta i butik (0 kr)
+                                <MapPin style={{ width: 14, height: 14 }} />
+                                <span>Hämta i butik (0 kr)</span>
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setCheckoutDeliveryMethod('shipping')}
                                 className={`btn btn-sm ${checkoutDeliveryMethod === 'shipping' ? 'btn-primary' : 'btn-secondary'}`}
-                                style={{ padding: 10, fontSize: '0.85rem' }}
+                                style={{ padding: 10, fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                               >
-                                PostNord Frakt ({isFreeShippingApplied ? 'Gratis' : `+${config.shipping_cost} kr`})
+                                <Truck style={{ width: 14, height: 14 }} />
+                                <span>PostNord Frakt ({isFreeShippingApplied ? 'Gratis' : `+${config.shipping_cost} kr`})</span>
                               </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ marginBottom: 15, padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-light)', borderRadius: 6 }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Leveransmetod</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: '0.9rem', color: config.delivery_method === 'shipping' ? '#60a5fa' : '#fbbf24' }}>
+                              {config.delivery_method === 'shipping' ? (
+                                <>
+                                  <Truck style={{ width: 16, height: 16, color: '#60a5fa' }} />
+                                  <span>PostNord Hemleverans ({isFreeShippingApplied ? 'Fri frakt' : `+${config.shipping_cost} kr`})</span>
+                                </>
+                              ) : (
+                                <>
+                                  <MapPin style={{ width: 16, height: 16, color: '#fbbf24' }} />
+                                  <span>Hämta i butik (Kostnadsfritt)</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 2. Betalsätt Selector */}
+                        {checkoutDeliveryMethod === 'shipping' ? (
+                          /* Shipping requires direct payment online */
+                          <div style={{ marginBottom: 15, padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-light)', borderRadius: 6 }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Betalsätt</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: '0.9rem', color: 'var(--color-success)' }}>
+                              <CreditCard style={{ width: 16, height: 16, color: 'var(--color-success)' }} />
+                              <span>Direktbetalning online via Swish (Krävs vid frakt)</span>
+                            </div>
+                          </div>
+                        ) : config.checkout_mode === 'both' ? (
+                          /* Pickup allows choosing between pay in store vs Swish online */
+                          <div style={{ marginBottom: 15 }}>
+                            <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Betalsätt *</label>
+                            <div className="settings-grid-2col" style={{ gap: 10 }}>
+                              <button
+                                type="button"
+                                onClick={() => setCheckoutModeSelected('booking')}
+                                className={`btn btn-sm ${checkoutModeSelected === 'booking' ? 'btn-primary' : 'btn-secondary'}`}
+                                style={{ padding: 10, fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                              >
+                                <CalendarRange style={{ width: 16, height: 16 }} />
+                                <span>Gratis Butiksbokning</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCheckoutModeSelected('ecommerce')}
+                                className={`btn btn-sm ${checkoutModeSelected === 'ecommerce' ? 'btn-primary' : 'btn-secondary'}`}
+                                style={{ padding: 10, fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                              >
+                                <CreditCard style={{ width: 16, height: 16 }} />
+                                <span>Betala online (Swish)</span>
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Forced to single checkout mode if pickup chosen */
+                          <div style={{ marginBottom: 15, padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-light)', borderRadius: 6 }}>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Betalsätt</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: '0.9rem', color: config.checkout_mode === 'ecommerce' ? 'var(--color-success)' : 'white', flexWrap: 'wrap' }}>
+                              {config.checkout_mode === 'ecommerce' ? (
+                                <>
+                                  <CreditCard style={{ width: 16, height: 16, color: 'var(--color-success)', flexShrink: 0 }} />
+                                  <span>Direktbetalning online via Swish</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CalendarRange style={{ width: 16, height: 16, color: 'var(--color-accent)', flexShrink: 0 }} />
+                                  <span style={{ wordBreak: 'break-word' }}>Kostnadsfri Butiksbokning (Betala vid hämtning)</span>
+                                </>
+                              )}
                             </div>
                           </div>
                         )}
 
                         {/* Delivery Address if Postnord chosen */}
-                        {isEcom && hasShipping && checkoutDeliveryMethod === 'shipping' && (
+                        {hasShipping && checkoutDeliveryMethod === 'shipping' && (
                           <div className="input-container" style={{ marginBottom: 12 }}>
                             <label>Leveransadress *</label>
                             <textarea
@@ -1038,28 +1361,28 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                         <div className="glass-panel" style={{ padding: 15, marginBottom: 20, background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)' }}>
                           <h4 style={{ margin: '0 0 10px 0', borderBottom: '1px solid var(--border-light)', paddingBottom: 6 }}>Prisöversikt:</h4>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.9rem' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                              <span style={{ color: 'var(--text-secondary)' }}>Produktsumma:</span>
-                              <span>{originalTotal} kr</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                              <span style={{ color: 'var(--text-secondary)', flexShrink: 0 }}>Produktsumma:</span>
+                              <span style={{ fontWeight: 600 }}>{originalTotal} kr</span>
                             </div>
                             
                             {cartDiscountValid && (
-                              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-success)', fontWeight: 600 }}>
-                                <span>Rabatt (Kod: {cartDiscountCode.toUpperCase()} -{cartDiscountPercent}%):</span>
-                                <span>-{discountAmount} kr</span>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, color: 'var(--color-success)', fontWeight: 600 }}>
+                                <span style={{ flexShrink: 1, fontSize: '0.8rem' }}>Rabatt (Kod: {cartDiscountCode.toUpperCase()} -{cartDiscountPercent}%):</span>
+                                <span style={{ flexShrink: 0 }}>-{discountAmount} kr</span>
                               </div>
                             )}
 
-                            {isEcom && hasShipping && checkoutDeliveryMethod === 'shipping' && (
-                              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
-                                <span>PostNord Hemleverans:</span>
-                                <span>{isFreeShippingApplied ? '0 kr (Fri frakt)' : `+${config.shipping_cost} kr`}</span>
+                            {hasShipping && checkoutDeliveryMethod === 'shipping' && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, color: '#60a5fa' }}>
+                                <span style={{ flexShrink: 0 }}>PostNord Hemleverans:</span>
+                                <span style={{ flexShrink: 0 }}>{isFreeShippingApplied ? '0 kr (Fri frakt)' : `+${config.shipping_cost} kr`}</span>
                               </div>
                             )}
 
-                            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-light)', paddingTop: 8, marginTop: 4, fontSize: '1.05rem', fontWeight: 800 }}>
-                              <span>Totalt {isEcom ? 'att betala' : 'att boka'}:</span>
-                              <span style={{ color: 'var(--color-success)' }}>{finalTotal} kr</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, borderTop: '1px solid var(--border-light)', paddingTop: 8, marginTop: 4, fontSize: '1.05rem', fontWeight: 800 }}>
+                              <span style={{ flexShrink: 0 }}>Totalt {isEcom ? 'att betala' : 'att boka'}:</span>
+                              <span style={{ color: 'var(--color-success)', flexShrink: 0 }}>{finalTotal} kr</span>
                             </div>
                           </div>
                         </div>

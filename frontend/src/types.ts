@@ -17,6 +17,9 @@ export interface Product {
   imageUrl?: string;
   variants: Variant[];
   createdAt?: string;
+  discount_percent?: number | null;
+  variantLabel1?: string;
+  variantLabel2?: string;
 }
 
 export interface Booking {
@@ -71,6 +74,7 @@ export interface ProjectSummary {
 
 export interface AnalyticsData {
   is_lump_sum: boolean;
+  total_sold_units?: number;
   stock_metrics: {
     total_cost: number;
     potential_sales: number;

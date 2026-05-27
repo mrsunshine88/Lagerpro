@@ -10,7 +10,7 @@ export class SettingsController {
 
   @UseGuards(JwtAuthGuard)
   @Get('projects/discount')
-  async getDiscount(@Query('project') project = 'Allmänt') {
+  async getDiscount(@Query('project') project = 'Alla') {
     const val = await this.settingsService.getDiscount(project);
     return { project, discount_percent: val };
   }
@@ -20,7 +20,7 @@ export class SettingsController {
   @Post('projects/discount')
   @HttpCode(HttpStatus.OK)
   async setDiscount(@Body() body: { project?: string; discount_percent?: number }) {
-    const project = body.project || 'Allmänt';
+    const project = body.project || 'Alla';
     const discount = parseFloat(body.discount_percent as any || 0.0);
     await this.settingsService.setDiscount(project, discount);
     return {
@@ -32,7 +32,7 @@ export class SettingsController {
 
   @UseGuards(JwtAuthGuard)
   @Get('projects/investment')
-  async getInvestment(@Query('project') project = 'Allmänt') {
+  async getInvestment(@Query('project') project = 'Alla') {
     const val = await this.settingsService.getInvestment(project);
     return { project, investment: val };
   }
@@ -42,7 +42,7 @@ export class SettingsController {
   @Post('projects/investment')
   @HttpCode(HttpStatus.OK)
   async setInvestment(@Body() body: { project?: string; investment?: number }) {
-    const project = body.project || 'Allmänt';
+    const project = body.project || 'Alla';
     const investment = parseFloat(body.investment as any || 0.0);
     await this.settingsService.setInvestment(project, investment);
     return { success: true };
@@ -145,7 +145,7 @@ export class SettingsController {
 
   @Get('public/projects/config')
   async getProjectConfig(@Query('project') project: string) {
-    const p = project || 'Allmänt';
+    const p = project || 'Alla';
     return this.settingsService.getProjectConfig(p);
   }
 

@@ -22,6 +22,8 @@ interface PosTabProps {
   handlePOSCheckout: () => Promise<void>;
   apiBaseUrl: string;
   getAxiosConfig: () => any;
+  hasAllAccess?: boolean;
+  projectsList?: string[];
 }
 
 export const PosTab: React.FC<PosTabProps> = ({
@@ -35,22 +37,32 @@ export const PosTab: React.FC<PosTabProps> = ({
   handlePOSCheckout,
   apiBaseUrl,
   getAxiosConfig,
+  hasAllAccess = false,
+  projectsList = [],
 }) => {
   // --- POS TAB SPECIFIC VISUAL STATES ---
   const [posShowCartMobile, setPosShowCartMobile] = useState(false);
   const [posCategory, setPosCategory] = useState('all');
   const [posSearch, setPosSearch] = useState('');
+  const [selectedVariants, setSelectedVariants] = useState<Record<number, number>>({});
 
   // --- SCANNER SIMULATOR STATES ---
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const [scanSkuInput, setScanSkuInput] = useState('');
   const [scanMessage, setScanMessage] = useState('');
 
-  // Categories list
-  const categoriesList = Array.from(new Set(products.map((p) => p.category)));
+  // Categories list – use projectsList if available so empty projects appear too
+  const categoriesList = projectsList.length > 0
+    ? projectsList
+    : Array.from(new Set(products.map((p) => p.category)));
+
+  const isPlaceholderProduct = (p: Product) => {
+    return p.name.startsWith('Startprodukt (') && p.description === 'Placeholder för nyskapat projekt.';
+  };
 
   // Filter products for POS
   const filteredPosProducts = products.filter((p) => {
+    if (isPlaceholderProduct(p)) return false;
     const matchesSearch =
       p.name.toLowerCase().includes(posSearch.toLowerCase()) ||
       p.category.toLowerCase().includes(posSearch.toLowerCase());
@@ -108,7 +120,9 @@ export const PosTab: React.FC<PosTabProps> = ({
                 <span>Skanna</span>
               </button>
               <select value={posCategory} onChange={(e) => setPosCategory(e.target.value)} className="custom-select" style={{ minWidth: 150, padding: '6px 12px', fontSize: '0.8rem' }}>
-                <option value="all">Alla kategorier</option>
+                {(hasAllAccess || categoriesList.length > 1) && (
+                  <option value="all">Alla kategorier</option>
+                )}
                 {categoriesList.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
@@ -135,19 +149,72 @@ export const PosTab: React.FC<PosTabProps> = ({
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>{p.category}</span>
                   <strong style={{ display: 'block', fontSize: '0.9rem', marginBottom: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</strong>
                 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {p.variants.map((v) => (
-                      <button
-                        key={v.id}
-                        disabled={v.stock <= 0}
-                        onClick={() => addToCart(p, v)}
-                        className={`pos-variant-btn ${v.stock <= 0 ? 'disabled' : ''}`}
-                        style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 6px', fontSize: '0.75rem', borderRadius: 4, cursor: v.stock > 0 ? 'pointer' : 'default', border: '1px solid var(--border-light)', background: 'rgba(255,255,255,0.01)' }}
-                      >
-                        <span>Storlek: {v.size} {v.color ? `(${v.color})` : ''}</span>
-                        <strong>{v.selling_price} kr ({v.stock} st)</strong>
-                      </button>
-                    ))}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {p.variants.map((v) => {
+                        const isSelected = selectedVariants[p.id] === v.id;
+                        return (
+                          <button
+                            key={v.id}
+                            disabled={v.stock <= 0}
+                            onClick={() => setSelectedVariants({ ...selectedVariants, [p.id]: isSelected ? 0 : v.id })}
+                            style={{
+                              padding: '6px 10px',
+                              background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.03)',
+                              border: isSelected ? '1px solid var(--color-primary)' : '1px solid var(--border-light)',
+                              borderRadius: 6,
+                              color: v.stock <= 0 ? 'var(--text-muted)' : isSelected ? 'white' : 'var(--text-secondary)',
+                              cursor: v.stock <= 0 ? 'not-allowed' : 'pointer',
+                              opacity: v.stock <= 0 ? 0.4 : 1,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              minWidth: 45
+                            }}
+                          >
+                            <span style={{ fontSize: '0.85rem', fontWeight: isSelected ? 700 : 500 }}>{v.size || 'U'}</span>
+                            {v.color && <span style={{ fontSize: '0.65rem', marginTop: 2 }}>{v.color}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    
+                    {(() => {
+                      const selectedId = selectedVariants[p.id];
+                      const selectedVariant = p.variants.find((v) => v.id === selectedId);
+                      
+                      return (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            {selectedVariant ? (
+                              <>
+                                {selectedVariant.original_price && selectedVariant.original_price > selectedVariant.selling_price && (
+                                  <span style={{ fontSize: '0.65rem', textDecoration: 'line-through', color: 'var(--text-muted)' }}>{selectedVariant.original_price} kr</span>
+                                )}
+                                <strong style={{ color: selectedVariant.original_price && selectedVariant.original_price > selectedVariant.selling_price ? 'var(--color-success)' : '#38bdf8', fontSize: '1rem' }}>{selectedVariant.selling_price} kr</strong>
+                              </>
+                            ) : (
+                              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Välj variant</span>
+                            )}
+                          </div>
+                          
+                          <button
+                            disabled={!selectedVariant || selectedVariant.stock <= 0}
+                            onClick={() => {
+                              if (selectedVariant) {
+                                addToCart(p, selectedVariant);
+                                setSelectedVariants({ ...selectedVariants, [p.id]: 0 }); // unselect
+                              }
+                            }}
+                            className="btn btn-primary btn-sm"
+                            style={{ padding: '6px 12px', fontWeight: 600, display: 'flex', gap: 6, alignItems: 'center' }}
+                          >
+                            <ShoppingBag style={{ width: 14, height: 14 }} />
+                            Lägg till
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

@@ -146,8 +146,8 @@ export class BookingsService {
       // Increment variant stock back by 1
       booking.variant.stock += 1;
 
-      // If it was paid (either confirmed or reserved but paid), we write a negative transaction to reverse the economy page!
-      if (wasPaid) {
+      // If it was confirmed or paid, we write a negative transaction to reverse the economy page!
+      if (wasConfirmed || wasPaid) {
         let sellingPrice = booking.variant.sellingPrice;
         if (booking.discountPercent > 0) {
           sellingPrice = Math.round(booking.variant.sellingPrice * (1.0 - booking.discountPercent / 100.0));

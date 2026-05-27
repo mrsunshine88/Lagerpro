@@ -14,7 +14,7 @@ export class ProductsService {
     @InjectRepository(Variant)
     private readonly variantRepository: EntityRepository<Variant>,
     private readonly em: EntityManager,
-  ) {}
+  ) { }
 
   async findAll(userRole: string, allowedProjects: string): Promise<Product[]> {
     // If admin or 'all' projects allowed, fetch everything
@@ -63,6 +63,9 @@ export class ProductsService {
     name: string;
     category?: string;
     description?: string;
+    discountPercent?: number | null;
+    variantLabel1?: string;
+    variantLabel2?: string;
     variants?: any[];
   }): Promise<Product> {
     if (!data.name) {
@@ -74,12 +77,21 @@ export class ProductsService {
       product.name = data.name;
       product.category = data.category || 'Skor';
       product.description = data.description || '';
+      product.variantLabel1 = data.variantLabel1 || 'Storlek';
+      product.variantLabel2 = data.variantLabel2 || 'Färg';
+      product.discountPercent = data.discountPercent !== undefined && data.discountPercent !== null && (data.discountPercent as any) !== ''
+        ? parseFloat(data.discountPercent as any)
+        : null;
 
       em.persist(product);
 
       const key = `discount_${product.category}`;
       const setting = await em.findOne(Setting, { key });
-      const discount = setting && setting.value ? parseFloat(setting.value) : 0.0;
+      const categoryDiscount = setting && setting.value ? parseFloat(setting.value) : 0.0;
+
+      const discount = (product.discountPercent !== null && product.discountPercent !== undefined && product.discountPercent > 0)
+        ? product.discountPercent
+        : categoryDiscount;
 
       const variantsData = data.variants || [];
       for (const v of variantsData) {
@@ -88,13 +100,13 @@ export class ProductsService {
         variant.size = v.size || '';
         variant.color = v.color || '';
         variant.stock = parseInt(v.stock) || 0;
-        variant.purchasePrice = parseFloat(v.purchasePrice) || 0.0;
-        variant.originalPrice = parseFloat(v.originalPrice) || parseFloat(v.sellingPrice) || 0.0;
+        variant.purchasePrice = parseFloat(v.purchasePrice ?? v.purchase_price) || 0.0;
+        variant.originalPrice = parseFloat(v.originalPrice ?? v.original_price) || parseFloat(v.sellingPrice ?? v.selling_price) || 0.0;
 
         if (discount > 0 && variant.originalPrice > 0) {
           variant.sellingPrice = Math.round(variant.originalPrice * (1.0 - discount / 100.0));
         } else {
-          variant.sellingPrice = parseFloat(v.sellingPrice) || 0.0;
+          variant.sellingPrice = parseFloat(v.sellingPrice ?? v.selling_price) || 0.0;
         }
 
         // Generate SKU if not provided
@@ -133,6 +145,9 @@ export class ProductsService {
       name: string;
       category?: string;
       description?: string;
+      discountPercent?: number | null;
+      variantLabel1?: string;
+      variantLabel2?: string;
       variants?: any[];
     },
   ): Promise<void> {
@@ -149,10 +164,19 @@ export class ProductsService {
       product.name = data.name;
       product.category = data.category || 'Skor';
       product.description = data.description || '';
+      if (data.variantLabel1 !== undefined) product.variantLabel1 = data.variantLabel1;
+      if (data.variantLabel2 !== undefined) product.variantLabel2 = data.variantLabel2;
+      product.discountPercent = data.discountPercent !== undefined && data.discountPercent !== null && (data.discountPercent as any) !== ''
+        ? parseFloat(data.discountPercent as any)
+        : null;
 
       const key = `discount_${product.category}`;
       const setting = await em.findOne(Setting, { key });
-      const discount = setting && setting.value ? parseFloat(setting.value) : 0.0;
+      const categoryDiscount = setting && setting.value ? parseFloat(setting.value) : 0.0;
+
+      const discount = (product.discountPercent !== null && product.discountPercent !== undefined && product.discountPercent > 0)
+        ? product.discountPercent
+        : categoryDiscount;
 
       const existingVariants = product.variants.getItems();
       const existingIds = existingVariants.map((ev) => ev.id);
@@ -161,11 +185,11 @@ export class ProductsService {
       const variantsData = data.variants || [];
       for (const v of variantsData) {
         const vId = parseInt(v.id);
-        const purchasePrice = parseFloat(v.purchasePrice) || 0.0;
-        const originalPrice = parseFloat(v.originalPrice) || parseFloat(v.sellingPrice) || 0.0;
+        const purchasePrice = parseFloat(v.purchasePrice ?? v.purchase_price) || 0.0;
+        const originalPrice = parseFloat(v.originalPrice ?? v.original_price) || parseFloat(v.sellingPrice ?? v.selling_price) || 0.0;
         const stock = parseInt(v.stock) || 0;
-        
-        let sellingPrice = parseFloat(v.sellingPrice) || 0.0;
+
+        let sellingPrice = parseFloat(v.sellingPrice ?? v.selling_price) || 0.0;
         if (discount > 0 && originalPrice > 0) {
           sellingPrice = Math.round(originalPrice * (1.0 - discount / 100.0));
         }
@@ -174,7 +198,7 @@ export class ProductsService {
           // Update existing variant
           processedIds.add(vId);
           const variant = existingVariants.find((ev) => ev.id === vId)!;
-          
+
           // Log adjustment if stock changed
           if (stock !== variant.stock) {
             const diff = stock - variant.stock;
@@ -300,7 +324,11 @@ export class ProductsService {
 
     const category = variant.product.category;
     const setting = await this.variantRepository.getEntityManager().findOne(Setting, { key: `discount_${category}` });
-    const discount = setting && setting.value ? parseFloat(setting.value) : 0.0;
+    const categoryDiscount = setting && setting.value ? parseFloat(setting.value) : 0.0;
+
+    const discount = (variant.product.discountPercent !== null && variant.product.discountPercent !== undefined && variant.product.discountPercent > 0)
+      ? variant.product.discountPercent
+      : categoryDiscount;
 
     variant.purchasePrice = data.purchasePrice;
     variant.originalPrice = data.originalPrice || data.sellingPrice || 0.0;

@@ -101,6 +101,12 @@ export class AnalyticsService {
     );
     const totalRevenue = totalRevResult[0]?.total ? parseFloat(totalRevResult[0].total) : 0.0;
 
+    // 5b. Total Sold Units (Faktiska historiska antalet sålda skor)
+    const totalSoldResult = await this.em.getConnection().execute(
+      `SELECT SUM(quantity) as total FROM transactions WHERE type = 'sale'`
+    );
+    const totalSoldUnits = totalSoldResult[0]?.total ? parseInt(totalSoldResult[0].total) : 0;
+
     // 6. Actual Net Cash Profit (Likviditet: Försäljningar - Inköpskostnad)
     const netProfit = totalRevenue - totalInvestment;
 
@@ -247,6 +253,7 @@ export class AnalyticsService {
 
     return {
       is_lump_sum: true,
+      total_sold_units: totalSoldUnits,
       stock_metrics: {
         total_cost: totalStockCost,
         potential_sales: potentialSalesVal,

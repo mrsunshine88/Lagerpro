@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import {
   Home,
@@ -34,7 +34,8 @@ import {
   Check,
   MapPin,
   RefreshCw,
-  Eye
+  Eye,
+  Menu
 } from 'lucide-react';
 import './App.css';
 
@@ -62,10 +63,70 @@ export default function App() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [projectsList, setProjectsList] = useState<string[]>([]);
+
+  // --- PERMISSION FILTERING ---
+  // For non-admin users: filter projects, products and bookings to only their allowed ones
+  const allowedProjectsList = useMemo(() => {
+    if (!userProfile || userProfile.role === 'admin') return projectsList;
+    const rawAllowed = (userProfile.allowed_projects || '').trim();
+    if (rawAllowed === 'all' || rawAllowed === '') return projectsList;
+    const allowed = rawAllowed.split(',').map((p) => p.trim()).filter(Boolean);
+    if (allowed.length === 0) return projectsList;
+    return projectsList.filter((p) => allowed.includes(p));
+  }, [projectsList, userProfile]);
+
+  const allowedProducts = useMemo(() => {
+    if (!userProfile || userProfile.role === 'admin') return products;
+    const rawAllowed = (userProfile.allowed_projects || '').trim();
+    if (rawAllowed === 'all' || rawAllowed === '') return products;
+    const allowed = rawAllowed.split(',').map((p) => p.trim()).filter(Boolean);
+    if (allowed.length === 0) return products;
+    return products.filter((p) => allowed.includes(p.category));
+  }, [products, userProfile]);
+
+  const allowedBookings = useMemo(() => {
+    if (!userProfile || userProfile.role === 'admin') return bookings;
+    const rawAllowed = (userProfile.allowed_projects || '').trim();
+    if (rawAllowed === 'all' || rawAllowed === '') return bookings;
+    const allowed = rawAllowed.split(',').map((p) => p.trim()).filter(Boolean);
+    if (allowed.length === 0) return bookings;
+    return bookings.filter((b) => allowed.includes(b.product_category));
+  }, [bookings, userProfile]);
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
 
   // --- NAVIGATION TAB ---
-  const [activeTab, setActiveTab] = useState<'hub' | 'pos' | 'inventory' | 'bookings' | 'analytics'>('hub');
+  const [activeTab, setActiveTab] = useState<'hub' | 'pos' | 'inventory' | 'bookings' | 'analytics' | 'admin'>('hub');
+  const [adminActiveTab, setAdminActiveTab] = useState<'users' | 'projects' | 'discount_codes' | 'swish' | 'paypal' | 'simulation'>('users');
+  const [confirmState, setConfirmState] = useState<{ message: string; resolve: (val: boolean) => void } | null>(null);
+  const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' | 'info' }[]>([]);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const triggerToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  };
+
+  useEffect(() => {
+    window.alert = (message: string) => {
+      let type: 'success' | 'error' | 'info' = 'info';
+      const lower = message.toLowerCase();
+      if (lower.includes('lyckades') || lower.includes('klar') || lower.includes('sparade') || lower.includes('skapad') || lower.includes('tack för') || lower.includes('lade till')) {
+        type = 'success';
+      } else if (lower.includes('misslyckades') || lower.includes('fel') || lower.includes('kunde inte') || lower.includes('ogiltig') || lower.includes('felaktig')) {
+        type = 'error';
+      }
+      triggerToast(message, type);
+    };
+
+    (window as any).confirm = (message: string) => {
+      return new Promise<boolean>((resolve) => {
+        setConfirmState({ message, resolve });
+      });
+    };
+  }, []);
 
   // --- POS CART ---
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -88,16 +149,16 @@ export default function App() {
   
   // Settings / Investments Modal
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
-  const [selectedSettingProject, setSelectedSettingProject] = useState('Allmänt');
-  const [settingInvestment, setSettingInvestment] = useState(0);
-  const [settingDiscount, setSettingDiscount] = useState(0);
+  const [selectedSettingProject, setSelectedSettingProject] = useState('Alla');
+  const [settingInvestment, setSettingInvestment] = useState<number | ''>(0);
+  const [settingDiscount, setSettingDiscount] = useState<number | ''>(0);
   const [newProjectName, setNewProjectName] = useState('');
 
   // Discount Codes Admin Management
   const [discountCodes, setDiscountCodes] = useState<any[]>([]);
   const [newDiscountCode, setNewDiscountCode] = useState('');
-  const [newDiscountProject, setNewDiscountProject] = useState('Allmänt');
-  const [newDiscountPercent, setNewDiscountPercent] = useState(0);
+  const [newDiscountProject, setNewDiscountProject] = useState('Alla');
+  const [newDiscountPercent, setNewDiscountPercent] = useState<number | ''>(0);
   const [newDiscountFreeShipping, setNewDiscountFreeShipping] = useState(false);
   const [newDiscountValidUntil, setNewDiscountValidUntil] = useState('');
   const [editingDiscountId, setEditingDiscountId] = useState<number | null>(null);
@@ -117,7 +178,7 @@ export default function App() {
   const [paypalHasSecret, setPaypalHasSecret] = useState(false);
   const [paypalCategoryFilter, setPaypalCategoryFilter] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
-  const [targetSyncProject, setTargetSyncProject] = useState('Skor');
+  const [targetSyncProject, setTargetSyncProject] = useState('Alla');
   
   // Webhook Simulation settings
   const [simulatedSku, setSimulatedSku] = useState('');
@@ -131,7 +192,7 @@ export default function App() {
   // Project e-commerce configs in settings modal
   const [settingCheckoutMode, setSettingCheckoutMode] = useState('booking');
   const [settingDeliveryMethod, setSettingDeliveryMethod] = useState('pickup');
-  const [settingShippingCost, setSettingShippingCost] = useState(0);
+  const [settingShippingCost, setSettingShippingCost] = useState<number | ''>(0);
 
   // Map of project configurations loaded publicly for catalog
   const [projectConfigs, setProjectConfigs] = useState<Record<string, { checkout_mode: string; delivery_method: string; shipping_cost: number }>>({});
@@ -214,14 +275,17 @@ export default function App() {
   // --- API CALLS ---
   const fetchPublicConfigsForProducts = async (prods: any[]) => {
     const categories = Array.from(new Set(prods.map((p: any) => p.category).filter(Boolean)));
+    if (!categories.includes('Alla')) {
+      categories.push('Alla');
+    }
     const configs: Record<string, any> = { ...projectConfigs };
     for (const cat of categories) {
-      if (configs[cat as string]) continue; // Skip if already fetched
+      if (configs[cat as string] !== undefined) continue; // Skip if already fetched or failed
       try {
         const res = await axios.get(`${API_BASE_URL}/api/public/projects/config?project=${encodeURIComponent(cat as string)}`);
         configs[cat as string] = res.data;
       } catch (e) {
-        configs[cat as string] = { checkout_mode: 'booking', delivery_method: 'pickup', shipping_cost: 0 };
+        configs[cat as string] = null;
       }
     }
     setProjectConfigs(configs);
@@ -364,7 +428,7 @@ export default function App() {
           {
             code: newDiscountCode.trim(),
             project: newDiscountProject,
-            discount_percent: newDiscountPercent,
+            discount_percent: newDiscountPercent === '' ? 0 : newDiscountPercent,
             free_shipping: newDiscountFreeShipping,
             valid_until: newDiscountValidUntil || null
           },
@@ -377,7 +441,7 @@ export default function App() {
           {
             code: newDiscountCode.trim(),
             project: newDiscountProject,
-            discount_percent: newDiscountPercent,
+            discount_percent: newDiscountPercent === '' ? 0 : newDiscountPercent,
             free_shipping: newDiscountFreeShipping,
             valid_until: newDiscountValidUntil || null
           },
@@ -444,7 +508,7 @@ export default function App() {
         `${API_BASE_URL}/api/projects/investment`,
         {
           project: selectedSettingProject,
-          investment: settingInvestment
+          investment: settingInvestment === '' ? 0 : settingInvestment
         },
         getAxiosConfig()
       );
@@ -453,7 +517,7 @@ export default function App() {
         `${API_BASE_URL}/api/projects/discount`,
         {
           project: selectedSettingProject,
-          discount_percent: settingDiscount
+          discount_percent: settingDiscount === '' ? 0 : settingDiscount
         },
         getAxiosConfig()
       );
@@ -464,7 +528,7 @@ export default function App() {
           project: selectedSettingProject,
           checkout_mode: settingCheckoutMode,
           delivery_method: settingDeliveryMethod,
-          shipping_cost: settingShippingCost
+          shipping_cost: settingShippingCost === '' ? 0 : settingShippingCost
         },
         getAxiosConfig()
       );
@@ -474,10 +538,12 @@ export default function App() {
       configs[selectedSettingProject] = {
         checkout_mode: settingCheckoutMode,
         delivery_method: settingDeliveryMethod,
-        shipping_cost: settingShippingCost
+        shipping_cost: settingShippingCost === '' ? 0 : settingShippingCost
       };
       setProjectConfigs(configs);
 
+      fetchProducts();
+      fetchPublicProducts();
       fetchAnalytics();
       alert('Inställningar sparade!');
     } catch (e) {
@@ -810,45 +876,65 @@ export default function App() {
                 <h1>LAGER<span>PRO</span></h1>
               </div>
               
-              <nav className="nav-tabs-wrapper">
-                <button onClick={() => setActiveTab('hub')} className={`nav-tab ${activeTab === 'hub' ? 'active' : ''}`}>
+              <nav className={`nav-tabs-wrapper ${mobileMenuOpen ? 'open' : ''}`}>
+                <button onClick={() => { setActiveTab('hub'); setMobileMenuOpen(false); }} className={`nav-tab ${activeTab === 'hub' ? 'active' : ''}`}>
                   <Home />
                   <span>Startmeny</span>
                 </button>
-                <button onClick={() => setActiveTab('pos')} className={`nav-tab ${activeTab === 'pos' ? 'active' : ''}`}>
+                <button onClick={() => { setActiveTab('pos'); setMobileMenuOpen(false); }} className={`nav-tab ${activeTab === 'pos' ? 'active' : ''}`}>
                   <ShoppingCart />
                   <span>Kassa (POS)</span>
                 </button>
-                <button onClick={() => setActiveTab('inventory')} className={`nav-tab ${activeTab === 'inventory' ? 'active' : ''}`}>
+                <button onClick={() => { setActiveTab('inventory'); setMobileMenuOpen(false); }} className={`nav-tab ${activeTab === 'inventory' ? 'active' : ''}`}>
                   <LayoutGrid />
                   <span>Lagerregister</span>
                 </button>
-                <button onClick={() => setActiveTab('bookings')} className={`nav-tab ${activeTab === 'bookings' ? 'active' : ''}`}>
+                <button onClick={() => { setActiveTab('bookings'); setMobileMenuOpen(false); }} className={`nav-tab ${activeTab === 'bookings' ? 'active' : ''}`}>
                   <CalendarCheck />
-                  <span>Bokningar</span>
-                  {bookings.filter((b) => b.status === 'pending').length > 0 && (
-                    <span className="bookings-notif-badge">{bookings.filter((b) => b.status === 'pending').length}</span>
+                  <span>Order</span>
+                  {allowedBookings.filter((b) => b.status === 'pending').length > 0 && (
+                    <span className="bookings-notif-badge">{allowedBookings.filter((b) => b.status === 'pending').length}</span>
                   )}
                 </button>
                 {userProfile?.role === 'admin' && (
-                  <button onClick={() => setActiveTab('analytics')} className={`nav-tab ${activeTab === 'analytics' ? 'active' : ''}`}>
-                    <TrendingUp />
-                    <span>Ekonomi &amp; Statistik</span>
-                  </button>
+                  <>
+                    <button onClick={() => { setActiveTab('analytics'); setMobileMenuOpen(false); }} className={`nav-tab ${activeTab === 'analytics' ? 'active' : ''}`}>
+                      <TrendingUp />
+                      <span>Ekonomi &amp; Statistik</span>
+                    </button>
+                    <button onClick={() => { setActiveTab('admin'); setMobileMenuOpen(false); }} className={`nav-tab ${activeTab === 'admin' ? 'active' : ''}`}>
+                      <ShieldCheck />
+                      <span>Admin</span>
+                    </button>
+                  </>
                 )}
+                <div className="mobile-only" style={{ height: 1, background: 'var(--border-light)', margin: '10px 0' }}></div>
+                <button 
+                  onClick={() => { setMobileMenuOpen(false); setProfileEmail(userProfile?.email || ''); setProfileModalOpen(true); }} 
+                  className="nav-tab mobile-only"
+                >
+                  <Settings />
+                  <span>Inställningar</span>
+                </button>
+                <button 
+                  onClick={() => { setMobileMenuOpen(false); handleLogout(); }} 
+                  className="nav-tab mobile-only" 
+                  style={{ color: '#ef4444' }}
+                >
+                  <LogOut />
+                  <span>Logga ut</span>
+                </button>
               </nav>
             </div>
             
             <div className="header-right">
-              {userProfile?.role === 'admin' && (
-                <button onClick={() => setAdminPanelOpen(true)} className="btn btn-ghost btn-icon" title="Admin-panel" style={{ color: 'var(--color-accent)' }}>
-                  <ShieldCheck />
-                </button>
-              )}
-              <button onClick={() => setSettingsModalOpen(true)} className="btn btn-ghost btn-icon" title="Inställningar">
-                <Settings />
+              <button className="mobile-menu-toggle mobile-only" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} title="Meny">
+                {mobileMenuOpen ? <X style={{ width: 22, height: 22 }} /> : <Menu style={{ width: 22, height: 22 }} />}
               </button>
-              <button onClick={handleLogout} className="btn btn-ghost btn-icon" title="Logga ut">
+              <button onClick={() => { setProfileEmail(userProfile?.email || ''); setProfileModalOpen(true); }} className="btn btn-ghost btn-icon desktop-only" title="Inställningar">
+                <Settings style={{ width: 18, height: 18 }} />
+              </button>
+              <button onClick={handleLogout} className="btn btn-ghost btn-icon desktop-only" title="Logga ut">
                 <LogOut />
               </button>
             </div>
@@ -905,29 +991,45 @@ export default function App() {
                       <div style={{ width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(236,72,153,0.12)', color: '#ec4899', marginBottom: 20 }}>
                         <CalendarCheck style={{ width: 24, height: 24 }} />
                       </div>
-                      <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', fontWeight: 700 }}>Bokningar</h3>
+                      <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', fontWeight: 700 }}>Order</h3>
                       <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 20 }}>Hantera kundreservationer. Godkänn, reservera eller avbryt inkomna bokningar direkt.</p>
                     </div>
                     <button onClick={() => setActiveTab('bookings')} className="btn btn-secondary btn-full" style={{ borderColor: '#ec4899', color: '#ec4899' }}>
-                      <span>Visa bokningar</span>
+                      <span>Visa order</span>
                       <ArrowRight style={{ marginLeft: 6, width: 16, height: 16 }} />
                     </button>
                   </div>
 
                   {userProfile?.role === 'admin' && (
-                    <div className="glass-card hub-card" style={{ padding: 25, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
-                      <div>
-                        <div style={{ width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(16,185,129,0.12)', color: 'var(--color-success)', marginBottom: 20 }}>
-                          <TrendingUp style={{ width: 24, height: 24 }} />
+                    <>
+                      <div className="glass-card hub-card" style={{ padding: 25, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+                        <div>
+                          <div style={{ width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(16,185,129,0.12)', color: 'var(--color-success)', marginBottom: 20 }}>
+                            <TrendingUp style={{ width: 24, height: 24 }} />
+                          </div>
+                          <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', fontWeight: 700 }}>Ekonomi &amp; Statistik</h3>
+                          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 20 }}>Följ upp kostnader, vinst, marginaler och se din break-even kalkyl för alla partier.</p>
                         </div>
-                        <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', fontWeight: 700 }}>Ekonomi &amp; Statistik</h3>
-                        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 20 }}>Följ upp kostnader, vinst, marginaler och se din break-even kalkyl för alla partier.</p>
+                        <button onClick={() => setActiveTab('analytics')} className="btn btn-secondary btn-full" style={{ borderColor: 'var(--color-success)', color: 'var(--color-success)' }}>
+                          <span>Visa ekonomi</span>
+                          <ArrowRight style={{ marginLeft: 6, width: 16, height: 16 }} />
+                        </button>
                       </div>
-                      <button onClick={() => setActiveTab('analytics')} className="btn btn-secondary btn-full" style={{ borderColor: 'var(--color-success)', color: 'var(--color-success)' }}>
-                        <span>Visa ekonomi</span>
-                        <ArrowRight style={{ marginLeft: 6, width: 16, height: 16 }} />
-                      </button>
-                    </div>
+
+                      <div className="glass-card hub-card" style={{ padding: 25, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
+                        <div>
+                          <div style={{ width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(139,92,246,0.12)', color: 'var(--color-primary)', marginBottom: 20 }}>
+                            <ShieldCheck style={{ width: 24, height: 24 }} />
+                          </div>
+                          <h3 style={{ margin: '0 0 8px 0', fontSize: '1.2rem', fontWeight: 700 }}>Admin</h3>
+                          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 20 }}>Hantera systeminställningar, projektkategorier, rabattkoder, Swish och PayPal.</p>
+                        </div>
+                        <button onClick={() => setActiveTab('admin')} className="btn btn-secondary btn-full" style={{ borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}>
+                          <span>Hantera system</span>
+                          <ArrowRight style={{ marginLeft: 6, width: 16, height: 16 }} />
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -936,7 +1038,7 @@ export default function App() {
             {/* --- TAB: KASSA (POS) --- */}
             {activeTab === 'pos' && (
               <PosTab
-                products={products}
+                products={allowedProducts}
                 cart={cart}
                 posDiscount={posDiscount}
                 addToCart={addToCart}
@@ -946,16 +1048,18 @@ export default function App() {
                 handlePOSCheckout={handlePOSCheckout}
                 apiBaseUrl={API_BASE_URL}
                 getAxiosConfig={getAxiosConfig}
+                hasAllAccess={userProfile?.role === 'admin' || userProfile?.allowed_projects === 'all'}
+                projectsList={allowedProjectsList}
               />
             )}
 
             {/* --- TAB: INVENTORY --- */}
             {activeTab === 'inventory' && (
               <InventoryTab
-                products={products}
+                products={allowedProducts}
                 fetchProducts={fetchProducts}
                 userProfile={userProfile}
-                projectsList={projectsList}
+                projectsList={allowedProjectsList}
                 fetchAnalytics={fetchAnalytics}
                 setQrVariant={setQrVariant}
                 setQrModalOpen={setQrModalOpen}
@@ -963,13 +1067,14 @@ export default function App() {
                 apiBaseUrl={API_BASE_URL}
                 getAxiosConfig={getAxiosConfig}
                 stockMetricsTotalCost={analytics?.stock_metrics?.total_cost || 0}
+                totalSoldUnits={analytics?.total_sold_units || 0}
               />
             )}
 
             {/* --- TAB: BOOKINGS --- */}
             {activeTab === 'bookings' && (
               <BookingsTab
-                bookings={bookings}
+                bookings={allowedBookings}
                 fetchBookings={fetchBookings}
                 userProfile={userProfile}
                 fetchAnalytics={fetchAnalytics}
@@ -989,131 +1094,307 @@ export default function App() {
                 getAxiosConfig={getAxiosConfig}
               />
             )}
-          </main>
-        </div>
-      )}
 
-      {/* ==================== LOGIN MODAL ==================== */}
-      <LoginModal
-        isOpen={loginModalOpen}
-        onClose={() => setLoginModalOpen(false)}
-        onLogin={handleLogin}
-        loginError={loginError}
-      />
-
-
-
-
-
-
-
-      {/* ==================== QR CODE MODAL ==================== */}
-      <QRModal
-        isOpen={qrModalOpen}
-        onClose={() => setQrModalOpen(false)}
-        variant={qrVariant}
-        apiBaseUrl={API_BASE_URL}
-      />
-
-      {/* ==================== SETTINGS MODAL ==================== */}
-      {settingsModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-card glass-modal modal-md" style={{ maxWidth: 550 }}>
-            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2>Lagerinställningar</h2>
-              <button className="btn-close" onClick={() => setSettingsModalOpen(false)}><X /></button>
-            </div>
-            <div className="modal-body" style={{ maxHeight: '75vh', overflowY: 'auto', paddingTop: 10 }}>
-              
-              <div className="settings-tabs-list">
-                <button type="button" onClick={() => setSettingsActiveTab('profile')} className={`btn btn-xs ${settingsActiveTab === 'profile' ? 'btn-primary' : 'btn-ghost'}`}>Profil &amp; Lösenord</button>
-                {userProfile?.role === 'admin' && (
-                  <>
-                    <button type="button" onClick={() => setSettingsActiveTab('projects')} className={`btn btn-xs ${settingsActiveTab === 'projects' ? 'btn-primary' : 'btn-ghost'}`}>Partier &amp; Kategorier</button>
-                    <button type="button" onClick={() => setSettingsActiveTab('discount_codes')} className={`btn btn-xs ${settingsActiveTab === 'discount_codes' ? 'btn-primary' : 'btn-ghost'}`}>Rabattkoder</button>
-                    <button type="button" onClick={() => setSettingsActiveTab('swish')} className={`btn btn-xs ${settingsActiveTab === 'swish' ? 'btn-primary' : 'btn-ghost'}`}>Swish-nycklar</button>
-                    <button type="button" onClick={() => setSettingsActiveTab('paypal')} className={`btn btn-xs ${settingsActiveTab === 'paypal' ? 'btn-primary' : 'btn-ghost'}`}>PayPal-kassa</button>
-                    <button type="button" onClick={() => setSettingsActiveTab('simulation')} className={`btn btn-xs ${settingsActiveTab === 'simulation' ? 'btn-primary' : 'btn-ghost'}`}>Simulering</button>
-                  </>
-                )}
-              </div>
-
-              {settingsActiveTab === 'profile' && (
-                <div style={{ paddingBottom: 10 }}>
-                  <h3>Din profil &amp; Lösenord</h3>
-                  <button onClick={() => { setProfileEmail(userProfile?.email || ''); setProfileModalOpen(true); }} className="btn btn-secondary btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <User style={{ width: 14, height: 14 }} />
-                    <span>Uppdatera profiluppgifter</span>
-                  </button>
+            {/* --- TAB: SYSTEMADMIN (ADMIN ONLY) --- */}
+            {activeTab === 'admin' && userProfile?.role === 'admin' && (
+              <div className="tab-pane">
+                <div className="welcome-banner glass-card" style={{ padding: 25, marginBottom: 25, background: 'linear-gradient(135deg, rgba(139,92,246,0.06) 0%, rgba(5,7,12,0.3) 100%)', border: '1px solid var(--border-light)' }}>
+                  <h2 style={{ fontSize: '1.6rem', margin: 0, fontWeight: 800 }}>Administration</h2>
+                  <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: 4 }}>
+                    Hantera systeminställningar, projektkategorier, personalkonton, rabattkoder samt kopplingar till Swish och PayPal.
+                  </p>
                 </div>
-              )}
 
-              {userProfile?.role === 'admin' && (
-                <>
-                  {settingsActiveTab === 'projects' && (
-                    <>
+                <div className="settings-tabs-list desktop-only" style={{ marginBottom: 20, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button type="button" onClick={() => setAdminActiveTab('users')} className={`btn btn-sm ${adminActiveTab === 'users' ? 'btn-primary' : 'btn-ghost'}`}>Personalkonton</button>
+                  <button type="button" onClick={() => setAdminActiveTab('projects')} className={`btn btn-sm ${adminActiveTab === 'projects' ? 'btn-primary' : 'btn-ghost'}`}>Kategorier &amp; Marginal</button>
+                  <button type="button" onClick={() => setAdminActiveTab('discount_codes')} className={`btn btn-sm ${adminActiveTab === 'discount_codes' ? 'btn-primary' : 'btn-ghost'}`}>Rabattkoder</button>
+                  <button type="button" onClick={() => setAdminActiveTab('paypal')} className={`btn btn-sm ${adminActiveTab === 'paypal' ? 'btn-primary' : 'btn-ghost'}`}>PayPal Integration</button>
+                  <button type="button" onClick={() => setAdminActiveTab('swish')} className={`btn btn-sm ${adminActiveTab === 'swish' ? 'btn-primary' : 'btn-ghost'}`}>Swish Integration</button>
+                  <button type="button" onClick={() => setAdminActiveTab('simulation')} className={`btn btn-sm ${adminActiveTab === 'simulation' ? 'btn-primary' : 'btn-ghost'}`}>Utvecklarsimulering</button>
+                </div>
+
+                <div className="mobile-only" style={{ marginBottom: 20 }}>
+                  <label style={{ display: 'block', marginBottom: 6, fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Välj admin-sektion:</label>
+                  <select
+                    value={adminActiveTab}
+                    onChange={(e) => setAdminActiveTab(e.target.value as any)}
+                    className="custom-select"
+                    style={{ width: '100%', height: 42 }}
+                  >
+                    <option value="users">Personalkonton</option>
+                    <option value="projects">Kategorier &amp; Marginal</option>
+                    <option value="discount_codes">Rabattkoder</option>
+                    <option value="paypal">PayPal Integration</option>
+                    <option value="swish">Swish Integration</option>
+                    <option value="simulation">Utvecklarsimulering</option>
+                  </select>
+                </div>
+
+                <div className="glass-card" style={{ padding: 24, minHeight: 400 }}>
+                  
+                  {/* SUB-TAB: users (STAFF CRUD) */}
+                  {adminActiveTab === 'users' && (
+                    <div>
+                      <div style={{ borderBottom: '1px solid var(--border-light)', paddingBottom: 20, marginBottom: 20 }}>
+                        <h3>{editingUserId ? 'Redigera personalkonto' : 'Lägg till personal'}</h3>
+                        <form onSubmit={handleSaveUser}>
+                          <div className="input-container" style={{ marginBottom: 12 }}>
+                            <label>E-postadress *</label>
+                            <input type="email" value={adminUserEmail} onChange={(e) => setAdminUserEmail(e.target.value)} disabled={!!editingUserId} required placeholder="T.ex. personal@lagerpro.se..." style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                          </div>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 15 }}>
+                            <div className="input-container">
+                              <label>Lösenord {editingUserId ? '(valfritt)' : '*'}</label>
+                              <input type="password" value={adminUserPassword} onChange={(e) => setAdminUserPassword(e.target.value)} required={!editingUserId} placeholder="Minst 4 tecken..." style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                            </div>
+                            <div className="input-container">
+                              <label>Behörighetsroll</label>
+                              <select value={adminUserRole} onChange={(e) => setAdminUserRole(e.target.value as any)} className="custom-select" style={{ width: '100%', height: 42 }}>
+                                <option value="user">Standardpersonal</option>
+                                <option value="admin">Administratör (Full behörighet)</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="input-container" style={{ marginBottom: 15 }}>
+                            <label style={{ display: 'block', marginBottom: 6 }}>Tillåtna Projekt / Kategori-partier</label>
+                            <div style={{ display: 'flex', gap: 10, marginBottom: 8 }}>
+                              <select
+                                className="custom-select"
+                                style={{ flex: 1, height: 42 }}
+                                value=""
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (!val) return;
+                                  if (val === 'all') {
+                                    setAdminUserProjects('all');
+                                  } else {
+                                    const currentList = adminUserProjects === 'all' ? [] : adminUserProjects.split(',').map((p) => p.trim()).filter(Boolean);
+                                    if (!currentList.includes(val)) {
+                                      const newList = [...currentList, val];
+                                      setAdminUserProjects(newList.join(', '));
+                                    }
+                                  }
+                                }}
+                              >
+                                <option value="">-- Välj projekt att tillåta --</option>
+                                <option value="all">Alla projekt (all)</option>
+                                {projectsList.map((p) => (
+                                  <option key={p} value={p}>{p}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                              {(() => {
+                                const list = adminUserProjects === 'all'
+                                  ? ['all']
+                                  : adminUserProjects.split(',').map((p) => p.trim()).filter(Boolean);
+                                
+                                return list.map((proj) => (
+                                  <span key={proj} className="badge" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: '0.8rem', background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 16 }}>
+                                    <span>{proj === 'all' ? 'Alla projekt (all)' : proj}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (proj === 'all') {
+                                          setAdminUserProjects('');
+                                        } else {
+                                          const newList = list.filter((p) => p !== proj && p !== 'all');
+                                          setAdminUserProjects(newList.join(', '));
+                                        }
+                                      }}
+                                      style={{ border: 'none', background: 'none', color: 'var(--color-danger)', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+                                    >
+                                      <X style={{ width: 14, height: 14 }} />
+                                    </button>
+                                  </span>
+                                ));
+                              })()}
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: 10 }}>
+                            <button type="submit" className="btn btn-primary">{editingUserId ? 'Spara ändringar' : 'Skapa användare'}</button>
+                            {editingUserId && (
+                              <button type="button" onClick={() => { setEditingUserId(null); setAdminUserEmail(''); setAdminUserPassword(''); setAdminUserRole('user'); setAdminUserProjects('all'); }} className="btn btn-ghost">Avbryt redigering</button>
+                            )}
+                          </div>
+                        </form>
+                      </div>
+
+                      <div style={{ marginTop: 25 }}>
+                        <h3>Registrerade personalkonton</h3>
+                        <div style={{ border: '1px solid var(--border-light)', borderRadius: 4, overflow: 'hidden' }}>
+                          <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
+                            <thead>
+                              <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border-light)' }}>
+                                <th style={{ padding: '8px 12px' }}>Användare</th>
+                                <th style={{ padding: '8px 12px' }}>Roll</th>
+                                <th style={{ padding: '8px 12px' }}>Tillåtna projekt</th>
+                                <th style={{ padding: '8px 12px', textAlign: 'right' }}>Åtgärder</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {usersList.map((u) => (
+                                <tr key={u.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                                  <td style={{ padding: '8px 12px' }}><strong>{u.email}</strong></td>
+                                  <td style={{ padding: '8px 12px' }}><span className="badge" style={{ background: u.role === 'admin' ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.05)' }}>{u.role}</span></td>
+                                  <td style={{ padding: '8px 12px' }}><code style={{ fontSize: '0.75rem' }}>{u.allowed_projects}</code></td>
+                                  <td style={{ padding: '8px 12px', textAlign: 'right' }}>
+                                    {u.id !== 1 && u.email !== 'apersson508@gmail.com' ? (
+                                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                        <button onClick={() => { setEditingUserId(u.id); setAdminUserEmail(u.email); setAdminUserRole(u.role); setAdminUserProjects(u.allowed_projects); }} className="btn btn-ghost btn-icon btn-xs"><Edit style={{ width: 14, height: 14 }} /></button>
+                                        <button onClick={() => handleDeleteUser(u.id)} className="btn btn-ghost btn-icon btn-xs" style={{ color: 'var(--color-danger)' }}><Trash2 style={{ width: 14, height: 14 }} /></button>
+                                      </div>
+                                    ) : (
+                                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Skyddat huvudkonto</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUB-TAB: projects (KATEGORIER & SETTINGS WITH CHECKBOXES) */}
+                  {adminActiveTab === 'projects' && (
+                    <div>
                       <div style={{ borderBottom: '1px solid var(--border-light)', paddingBottom: 20, marginBottom: 20 }}>
                         <h3>Partiinvesteringar &amp; Marginal</h3>
                         <form onSubmit={handleUpdateSettings}>
                           <div className="input-container" style={{ marginBottom: 12 }}>
                             <label>Välj kategori / projektparti</label>
                             <select value={selectedSettingProject} onChange={(e) => setSelectedSettingProject(e.target.value)} className="custom-select" style={{ width: '100%', height: 42 }}>
-                              <option value="Allmänt">Allmänt</option>
-                              <option value="Skor">Skor</option>
-                              <option value="Krukor">Krukor</option>
-                              <option value="Utemöbler">Utemöbler</option>
+                              <option value="Alla">Alla projekt (Standard)</option>
                               {projectsList.map((p) => (
                                 <option key={p} value={p}>{p}</option>
                               ))}
                             </select>
                           </div>
 
-                          <div className="settings-grid-2col">
+                          <div className="settings-grid-2col" style={{ marginBottom: 15 }}>
                             <div className="input-container">
                               <label>Investerat kapital (Lump-sum, kr)</label>
-                              <input type="number" min="0" value={settingInvestment} onChange={(e) => setSettingInvestment(parseFloat(e.target.value) || 0)} style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                              <input type="number" min="0" value={settingInvestment} onChange={(e) => { const val = e.target.value; setSettingInvestment(val === '' ? '' : parseFloat(val)); }} style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
                             </div>
                             <div className="input-container">
                               <label>Standardrabatt (%)</label>
-                              <input type="number" min="0" max="100" value={settingDiscount} onChange={(e) => setSettingDiscount(parseFloat(e.target.value) || 0)} style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                              <input type="number" min="0" max="100" value={settingDiscount} onChange={(e) => { const val = e.target.value; setSettingDiscount(val === '' ? '' : parseFloat(val)); }} style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
                             </div>
                           </div>
 
-                          <div className="settings-grid-2col">
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
                             <div className="input-container">
-                              <label>Betalsätt</label>
-                              <select
-                                value={settingCheckoutMode}
-                                onChange={(e) => setSettingCheckoutMode(e.target.value)}
-                                className="custom-select"
-                                style={{ width: '100%', height: 42 }}
-                              >
-                                <option value="booking">Gratis Butiksbokning</option>
-                                <option value="ecommerce">Direktbetalning online via Swish</option>
-                              </select>
+                              <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Betalsätt</label>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: 'rgba(255,255,255,0.02)', padding: 12, borderRadius: 6, border: '1px solid var(--border-light)' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: '0.85rem' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={settingCheckoutMode === 'booking' || settingCheckoutMode === 'both'}
+                                    onChange={(e) => {
+                                      const isBookingChecked = e.target.checked;
+                                      const isSwishChecked = settingCheckoutMode === 'ecommerce' || settingCheckoutMode === 'both';
+                                      if (isBookingChecked && isSwishChecked) {
+                                        setSettingCheckoutMode('both');
+                                      } else if (isBookingChecked) {
+                                        setSettingCheckoutMode('booking');
+                                      } else if (isSwishChecked) {
+                                        setSettingCheckoutMode('ecommerce');
+                                      } else {
+                                        alert('Du måste välja minst ett betalsätt!');
+                                      }
+                                    }}
+                                    style={{ width: 16, height: 16, accentColor: 'var(--color-primary)', cursor: 'pointer' }}
+                                  />
+                                  <span>Gratis Butiksbokning</span>
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: '0.85rem' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={settingCheckoutMode === 'ecommerce' || settingCheckoutMode === 'both'}
+                                    onChange={(e) => {
+                                      const isSwishChecked = e.target.checked;
+                                      const isBookingChecked = settingCheckoutMode === 'booking' || settingCheckoutMode === 'both';
+                                      if (isBookingChecked && isSwishChecked) {
+                                        setSettingCheckoutMode('both');
+                                      } else if (isSwishChecked) {
+                                        setSettingCheckoutMode('ecommerce');
+                                      } else if (isBookingChecked) {
+                                        setSettingCheckoutMode('booking');
+                                      } else {
+                                        alert('Du måste välja minst ett betalsätt!');
+                                      }
+                                    }}
+                                    style={{ width: 16, height: 16, accentColor: 'var(--color-primary)', cursor: 'pointer' }}
+                                  />
+                                  <span>Direktbetalning online via Swish</span>
+                                </label>
+                              </div>
                             </div>
+
                             <div className="input-container">
-                              <label>Leveranssätt</label>
-                              <select
-                                value={settingDeliveryMethod}
-                                onChange={(e) => setSettingDeliveryMethod(e.target.value)}
-                                className="custom-select"
-                                style={{ width: '100%', height: 42 }}
-                              >
-                                <option value="pickup">Endast upphämtning i butik</option>
-                                <option value="shipping_pickup">Aktivera PostNord hemleverans</option>
-                              </select>
+                              <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Leveranssätt</label>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, background: 'rgba(255,255,255,0.02)', padding: 12, borderRadius: 6, border: '1px solid var(--border-light)' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: '0.85rem' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={settingDeliveryMethod === 'pickup' || settingDeliveryMethod === 'shipping_pickup'}
+                                    onChange={(e) => {
+                                      const isPickupChecked = e.target.checked;
+                                      const isShippingChecked = settingDeliveryMethod === 'shipping' || settingDeliveryMethod === 'shipping_pickup';
+                                      if (isPickupChecked && isShippingChecked) {
+                                        setSettingDeliveryMethod('shipping_pickup');
+                                      } else if (isPickupChecked) {
+                                        setSettingDeliveryMethod('pickup');
+                                      } else if (isShippingChecked) {
+                                        setSettingDeliveryMethod('shipping');
+                                      } else {
+                                        alert('Du måste välja minst ett leveranssätt!');
+                                      }
+                                    }}
+                                    style={{ width: 16, height: 16, accentColor: 'var(--color-primary)', cursor: 'pointer' }}
+                                  />
+                                  <span>Upphämtning i butik</span>
+                                </label>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: '0.85rem' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={settingDeliveryMethod === 'shipping' || settingDeliveryMethod === 'shipping_pickup'}
+                                    onChange={(e) => {
+                                      const isShippingChecked = e.target.checked;
+                                      const isPickupChecked = settingDeliveryMethod === 'pickup' || settingDeliveryMethod === 'shipping_pickup';
+                                      if (isPickupChecked && isShippingChecked) {
+                                        setSettingDeliveryMethod('shipping_pickup');
+                                      } else if (isShippingChecked) {
+                                        setSettingDeliveryMethod('shipping');
+                                      } else if (isPickupChecked) {
+                                        setSettingDeliveryMethod('pickup');
+                                      } else {
+                                        alert('Du måste välja minst ett leveranssätt!');
+                                      }
+                                    }}
+                                    style={{ width: 16, height: 16, accentColor: 'var(--color-primary)', cursor: 'pointer' }}
+                                  />
+                                  <span>PostNord hemleverans</span>
+                                </label>
+                              </div>
                             </div>
                           </div>
 
-                          {settingDeliveryMethod === 'shipping_pickup' && (
+                          {(settingDeliveryMethod === 'shipping' || settingDeliveryMethod === 'shipping_pickup') && (
                             <div className="input-container" style={{ marginBottom: 15 }}>
                               <label>Fraktavgift vid hemleverans (kr)</label>
                               <input
                                 type="number"
                                 min="0"
                                 value={settingShippingCost}
-                                onChange={(e) => setSettingShippingCost(parseFloat(e.target.value) || 0)}
+                                onChange={(e) => { const val = e.target.value; setSettingShippingCost(val === '' ? '' : parseFloat(val)); }}
                                 style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
                               />
                             </div>
@@ -1130,7 +1411,7 @@ export default function App() {
                           <button onClick={handleCreateProject} className="btn btn-primary btn-sm">Skapa</button>
                         </div>
 
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
                           {projectsList.map((p) => (
                             <div key={p} className="badge" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', fontSize: '0.8rem' }}>
                               <span>{p}</span>
@@ -1139,10 +1420,272 @@ export default function App() {
                           ))}
                         </div>
                       </div>
-                    </>
+                    </div>
                   )}
 
-                  {settingsActiveTab === 'swish' && (
+                  {/* SUB-TAB: discount_codes (RABATTKODER) */}
+                  {adminActiveTab === 'discount_codes' && (
+                    <div>
+                      <h3>Hantera Rabattkoder</h3>
+
+                      <form onSubmit={handleSaveDiscountCode} style={{ marginBottom: 15, background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', padding: 12, borderRadius: 6 }}>
+                        <div className="discount-form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 12 }}>
+                          <div className="input-container">
+                            <label style={{ fontSize: '0.75rem', marginBottom: 4 }}>Välj projekt/kategori</label>
+                            <select
+                              value={newDiscountProject}
+                              onChange={(e) => setNewDiscountProject(e.target.value)}
+                              className="custom-select"
+                              style={{ width: '100%', height: 38, fontSize: '0.85rem' }}
+                            >
+                              <option value="Alla">Alla projekt</option>
+                              {projectsList.map((p) => (
+                                <option key={p} value={p}>{p}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="input-container">
+                            <label style={{ fontSize: '0.75rem', marginBottom: 4 }}>Rabattkod (Minst 3 tecken) *</label>
+                            <input
+                              type="text"
+                              value={newDiscountCode}
+                              onChange={(e) => setNewDiscountCode(e.target.value.toUpperCase())}
+                              required
+                              placeholder="T.ex. VÅRPROMO"
+                              style={{ width: '100%', padding: '8px 10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, fontSize: '0.85rem' }}
+                            />
+                          </div>
+
+                          <div className="input-container">
+                            <label style={{ fontSize: '0.75rem', marginBottom: 4 }}>Rabattsats (%) *</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={newDiscountPercent}
+                              onChange={(e) => { const val = e.target.value; setNewDiscountPercent(val === '' ? '' : parseFloat(val)); }}
+                              required
+                              style={{ width: '100%', padding: '8px 10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, fontSize: '0.85rem' }}
+                            />
+                          </div>
+
+                          <div className="input-container">
+                            <label style={{ fontSize: '0.75rem', marginBottom: 4 }}>Giltig t.o.m. (Valfritt)</label>
+                            <input
+                              type="date"
+                              value={newDiscountValidUntil}
+                              onChange={(e) => setNewDiscountValidUntil(e.target.value)}
+                              style={{ width: '100%', padding: '6px 10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, fontSize: '0.85rem', colorScheme: 'dark' }}
+                            />
+                          </div>
+
+                          <div className="input-container" style={{ display: 'flex', alignItems: 'center', height: '100%', paddingTop: 18 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.8' }}>
+                              <input
+                                type="checkbox"
+                                checked={newDiscountFreeShipping}
+                                onChange={(e) => setNewDiscountFreeShipping(e.target.checked)}
+                                style={{ width: 16, height: 16, accentColor: 'var(--color-primary)', cursor: 'pointer' }}
+                              />
+                              <span>Fri frakt?</span>
+                            </label>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button type="submit" className="btn btn-primary btn-xs">
+                            {editingDiscountId ? 'Uppdatera kod' : 'Skapa rabattkod'}
+                          </button>
+                          {editingDiscountId && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingDiscountId(null);
+                                setNewDiscountCode('');
+                                setNewDiscountPercent(0);
+                                setNewDiscountFreeShipping(false);
+                                setNewDiscountValidUntil('');
+                              }}
+                              className="btn btn-ghost btn-xs"
+                            >
+                              Avbryt
+                            </button>
+                          )}
+                        </div>
+                      </form>
+
+                      <div style={{ border: '1px solid var(--border-light)', borderRadius: 4, overflow: 'hidden' }}>
+                        <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
+                          <thead>
+                            <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border-light)' }}>
+                              <th style={{ padding: '8px 12px' }}>Kod</th>
+                              <th style={{ padding: '8px 12px' }}>Projekt / Parti</th>
+                              <th style={{ padding: '8px 12px' }}>Effekt</th>
+                              <th style={{ padding: '8px 12px' }}>Giltighet</th>
+                              <th style={{ padding: '8px 12px', textAlign: 'right' }}>Åtgärder</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {discountCodes.map((d) => (
+                              <tr key={d.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                                <td style={{ padding: '8px 12px' }}>
+                                  <span className="badge" style={{ background: 'rgba(139,92,246,0.15)', color: 'var(--color-primary)', fontWeight: 700 }}>
+                                    {d.code}
+                                  </span>
+                                </td>
+                                <td style={{ padding: '8px 12px' }}><strong>{d.project}</strong></td>
+                                <td style={{ padding: '8px 12px' }}>
+                                  {(d.discountPercent ?? d.discount_percent)}% rabatt
+                                  {(d.freeShipping ?? d.free_shipping) && <span style={{ color: '#60a5fa', marginLeft: 8 }}>+ Fri frakt</span>}
+                                </td>
+                                <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>
+                                  {(d.validUntil ?? d.valid_until) ? new Date(d.validUntil ?? d.valid_until).toLocaleDateString('sv-SE') : 'Tills vidare'}
+                                </td>
+                                <td style={{ padding: '8px 12px', textAlign: 'right' }}>
+                                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                    <button
+                                      onClick={() => {
+                                        setEditingDiscountId(d.id);
+                                        setNewDiscountCode(d.code);
+                                        setNewDiscountProject(d.project);
+                                        setNewDiscountPercent(d.discountPercent ?? d.discount_percent ?? 0);
+                                        setNewDiscountFreeShipping(d.freeShipping ?? d.free_shipping ?? false);
+                                        const vu = d.validUntil ?? d.valid_until;
+                                        setNewDiscountValidUntil(vu ? vu.substring(0, 10) : '');
+                                      }}
+                                      className="btn btn-ghost btn-icon btn-xs"
+                                    >
+                                      <Edit style={{ width: 14, height: 14 }} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteDiscountCode(d.id, d.code)}
+                                      className="btn btn-ghost btn-icon btn-xs"
+                                      style={{ color: 'var(--color-danger)' }}
+                                    >
+                                      <Trash2 style={{ width: 14, height: 14 }} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                            {discountCodes.length === 0 && (
+                              <tr>
+                                <td colSpan={5} style={{ textAlign: 'center', padding: 15, color: 'var(--text-muted)' }}>
+                                  Inga rabattkoder skapade än.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUB-TAB: paypal (PAYPAL KEYS AND SYNCER) */}
+                  {adminActiveTab === 'paypal' && (
+                    <div>
+                      <h3>PayPal Integration &amp; Katalogsynkning</h3>
+                      <form onSubmit={handleSavePaypalSettings} style={{ marginBottom: 20 }}>
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label>PayPal Client ID *</label>
+                          <input
+                            type="text"
+                            placeholder="Klistra in ditt PayPal Client ID..."
+                            value={paypalClientId}
+                            onChange={(e) => setPaypalClientId(e.target.value)}
+                            required
+                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                        </div>
+
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>PayPal Client Secret</span>
+                            {paypalHasSecret && <span style={{ color: 'var(--color-success)', fontSize: '0.8rem', fontWeight: 600 }}>✓ Secret sparad</span>}
+                          </label>
+                          <input
+                            type="password"
+                            placeholder={paypalHasSecret ? "••••••••••••••••••••" : "Klistra in ditt PayPal Client Secret..."}
+                            value={paypalClientSecret}
+                            onChange={(e) => setPaypalClientSecret(e.target.value)}
+                            required={!paypalHasSecret}
+                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                        </div>
+
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label>PayPal Webhook ID (för säljsynk)</label>
+                          <input
+                            type="text"
+                            placeholder="Klistra in ditt PayPal Webhook ID..."
+                            value={paypalWebhookId}
+                            onChange={(e) => setPaypalWebhookId(e.target.value)}
+                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                        </div>
+
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label>PayPal Kategorifilter — synka bara produkter från denna kategori</label>
+                          <select
+                            value={paypalCategoryFilter}
+                            onChange={(e) => setPaypalCategoryFilter(e.target.value)}
+                            className="custom-select"
+                            style={{ width: '100%', height: 42 }}
+                          >
+                            <option value="">Alla kategorier</option>
+                            {projectsList.map((p) => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="input-container" style={{ marginBottom: 15 }}>
+                          <label>PayPal Miljö (Mode)</label>
+                          <select
+                            value={paypalMode}
+                            onChange={(e) => setPaypalMode(e.target.value)}
+                            className="custom-select"
+                            style={{ width: '100%', height: 42 }}
+                          >
+                            <option value="sandbox">Sandbox (Testmiljö)</option>
+                            <option value="live">Live (Skarpt läge)</option>
+                          </select>
+                        </div>
+
+                        <button type="submit" className="btn btn-primary btn-sm">Spara PayPal-nycklar</button>
+                      </form>
+
+                      <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', padding: 15, borderRadius: 6 }}>
+                        <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 8 }}>Välj destinationsprojekt i Lagerpro för PayPal-synkning:</label>
+                        <div style={{ display: 'flex', gap: 10 }}>
+                          <select
+                            value={targetSyncProject}
+                            onChange={(e) => setTargetSyncProject(e.target.value)}
+                            className="custom-select"
+                            style={{ flex: 1, height: 38 }}
+                          >
+                            <option value="Alla">Alla projekt</option>
+                            {projectsList.map((p) => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => handleSyncPaypalCatalog(targetSyncProject)}
+                            disabled={isSyncing || !paypalClientId}
+                            className="btn btn-secondary btn-sm"
+                            style={{ borderColor: 'var(--color-accent)', color: 'var(--color-accent)', height: 38 }}
+                          >
+                            {isSyncing ? 'Synkar...' : 'Hämta skoprodukter'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SUB-TAB: swish (SWISH API SETTINGS) */}
+                  {adminActiveTab === 'swish' && (
                     <div>
                       <h3>Swish API-nycklar (Näthandel)</h3>
                       <form onSubmit={handleSaveSwishSettings}>
@@ -1189,108 +1732,8 @@ export default function App() {
                     </div>
                   )}
 
-                  {settingsActiveTab === 'paypal' && (
-                    <div>
-                      <h3>PayPal Integration &amp; Katalogsynkning</h3>
-                      <form onSubmit={handleSavePaypalSettings}>
-                        <div className="input-container" style={{ marginBottom: 12 }}>
-                          <label>PayPal Client ID *</label>
-                          <input
-                            type="text"
-                            placeholder="Klistra in ditt PayPal Client ID..."
-                            value={paypalClientId}
-                            onChange={(e) => setPaypalClientId(e.target.value)}
-                            required
-                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
-                          />
-                        </div>
-
-                        <div className="input-container" style={{ marginBottom: 12 }}>
-                          <label style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <span>PayPal Client Secret</span>
-                            {paypalHasSecret && <span style={{ color: 'var(--color-success)', fontSize: '0.8rem', fontWeight: 600 }}>✓ Secret sparad</span>}
-                          </label>
-                          <input
-                            type="password"
-                            placeholder={paypalHasSecret ? "••••••••••••••••••••" : "Klistra in ditt PayPal Client Secret..."}
-                            value={paypalClientSecret}
-                            onChange={(e) => setPaypalClientSecret(e.target.value)}
-                            required={!paypalHasSecret}
-                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
-                          />
-                        </div>
-
-                        <div className="input-container" style={{ marginBottom: 12 }}>
-                          <label>PayPal Webhook ID (för säljsynk)</label>
-                          <input
-                            type="text"
-                            placeholder="Klistra in ditt PayPal Webhook ID..."
-                            value={paypalWebhookId}
-                            onChange={(e) => setPaypalWebhookId(e.target.value)}
-                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
-                          />
-                        </div>
-
-                        <div className="input-container" style={{ marginBottom: 12 }}>
-                          <label>PayPal Kategorifilter (t.ex. FOOTWEAR, SHOES eller tomt för alla)</label>
-                          <input
-                            type="text"
-                            placeholder="T.ex. FOOTWEAR..."
-                            value={paypalCategoryFilter}
-                            onChange={(e) => setPaypalCategoryFilter(e.target.value)}
-                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
-                          />
-                        </div>
-
-                        <div className="input-container" style={{ marginBottom: 15 }}>
-                          <label>PayPal Miljö (Mode)</label>
-                          <select
-                            value={paypalMode}
-                            onChange={(e) => setPaypalMode(e.target.value)}
-                            className="custom-select"
-                            style={{ width: '100%', height: 42 }}
-                          >
-                            <option value="sandbox">Sandbox (Testmiljö)</option>
-                            <option value="live">Live (Skarpt läge)</option>
-                          </select>
-                        </div>
-
-                        <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', padding: 12, borderRadius: 6, marginBottom: 20 }}>
-                          <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 6 }}>Välj destinationsprojekt i Lagerpro för PayPal-synkning:</label>
-                          <div style={{ display: 'flex', gap: 10 }}>
-                            <select
-                              value={targetSyncProject}
-                              onChange={(e) => setTargetSyncProject(e.target.value)}
-                              className="custom-select"
-                              style={{ flex: 1, height: 38 }}
-                            >
-                              <option value="Skor">Skor</option>
-                              <option value="Krukor">Krukor</option>
-                              <option value="Utemöbler">Utemöbler</option>
-                              {projectsList.map((p) => (
-                                <option key={p} value={p}>{p}</option>
-                              ))}
-                            </select>
-                            <button
-                              type="button"
-                              onClick={() => handleSyncPaypalCatalog(targetSyncProject)}
-                              disabled={isSyncing || !paypalClientId}
-                              className="btn btn-secondary btn-sm"
-                              style={{ borderColor: 'var(--color-accent)', color: 'var(--color-accent)', height: 38 }}
-                            >
-                              {isSyncing ? 'Synkar...' : 'Hämta skoprodukter'}
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="settings-actions-flex">
-                          <button type="submit" className="btn btn-primary btn-sm">Spara PayPal-nycklar</button>
-                        </div>
-                      </form>
-                    </div>
-                  )}
-
-                  {settingsActiveTab === 'simulation' && (
+                  {/* SUB-TAB: simulation (DEVELOPER WEBHOOK SIMULATOR) */}
+                  {adminActiveTab === 'simulation' && (
                     <div>
                       <h3>Utvecklarverktyg &amp; Webhook-simulering</h3>
                       
@@ -1307,7 +1750,6 @@ export default function App() {
                             value={simulatedSku}
                             onChange={(e) => {
                               setSimulatedSku(e.target.value);
-                              // Auto-fill price based on variant selling price if found
                               const matched = products.flatMap(p => p.variants).find(v => v.sku === e.target.value);
                               if (matched) {
                                 setSimulatedPrice(matched.selling_price);
@@ -1326,6 +1768,17 @@ export default function App() {
                               ))
                             )}
                           </select>
+                          {(() => {
+                            const parentProd = products.find(p => p.variants.some(v => v.sku === simulatedSku));
+                            if (parentProd && parentProd.name.startsWith('Startprodukt (')) {
+                              return (
+                                <span style={{ display: 'block', fontSize: '0.8rem', color: '#fbbf24', marginTop: 6, lineHeight: 1.4 }}>
+                                  💡 <strong>Obs!</strong> Detta är projektets dolda startprodukt. För att se hur köpet uppdateras live i lager, kassa och kundportal, skapa en **riktig produkt** i <em>Lagerregister</em> först (eller synka från PayPal) och välj den här!
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
                         </div>
 
                         <div className="settings-grid-2col">
@@ -1381,190 +1834,52 @@ export default function App() {
                     </div>
                   )}
 
-                  {settingsActiveTab === 'discount_codes' && (
-                    <div>
-                      <h3>Hantera Rabattkoder</h3>
-
-                    <form onSubmit={handleSaveDiscountCode} style={{ marginBottom: 15, background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border-light)', padding: 12, borderRadius: 6 }}>
-                      <div className="discount-form-grid">
-                        <div className="input-container">
-                          <label style={{ fontSize: '0.75rem', marginBottom: 4 }}>Välj projekt/kategori</label>
-                          <select
-                            value={newDiscountProject}
-                            onChange={(e) => setNewDiscountProject(e.target.value)}
-                            className="custom-select"
-                            style={{ width: '100%', height: 38, fontSize: '0.85rem' }}
-                          >
-                            <option value="Alla">Alla projekt</option>
-                            <option value="Allmänt">Allmänt</option>
-                            <option value="Skor">Skor</option>
-                            <option value="Krukor">Krukor</option>
-                            <option value="Utemöbler">Utemöbler</option>
-                            {projectsList.map((p) => (
-                              <option key={p} value={p}>{p}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="input-container">
-                          <label style={{ fontSize: '0.75rem', marginBottom: 4 }}>Rabattkod</label>
-                          <input
-                            type="text"
-                            placeholder="T.ex. LARS"
-                            value={newDiscountCode}
-                            onChange={(e) => setNewDiscountCode(e.target.value)}
-                            required
-                            style={{ width: '100%', padding: 8, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, height: 38 }}
-                          />
-                        </div>
-                        <div className="input-container">
-                          <label style={{ fontSize: '0.75rem', marginBottom: 4 }}>Rabatt (%)</label>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            placeholder="20"
-                            value={newDiscountPercent}
-                            onChange={(e) => setNewDiscountPercent(parseFloat(e.target.value) || 0)}
-                            required
-                            style={{ width: '100%', padding: 8, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, height: 38 }}
-                          />
-                        </div>
-                        <div className="input-container">
-                          <label style={{ fontSize: '0.75rem', marginBottom: 4 }}>Giltig t.o.m (Valfritt)</label>
-                          <input
-                            type="date"
-                            value={newDiscountValidUntil}
-                            onChange={(e) => setNewDiscountValidUntil(e.target.value)}
-                            style={{ width: '100%', padding: 8, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4, height: 38 }}
-                          />
-                        </div>
-                        <div className="input-container" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', paddingBottom: 6 }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: '0.85rem', userSelect: 'none', color: 'white', marginTop: 4 }}>
-                            <input
-                              type="checkbox"
-                              checked={newDiscountFreeShipping}
-                              onChange={(e) => setNewDiscountFreeShipping(e.target.checked)}
-                              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--color-primary)' }}
-                            />
-                            <span>Fri frakt</span>
-                          </label>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button type="submit" className="btn btn-primary btn-sm" style={{ flex: 1 }}>
-                          {editingDiscountId ? 'Spara ändringar' : 'Skapa rabattkod'}
-                        </button>
-                        {editingDiscountId && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingDiscountId(null);
-                              setNewDiscountCode('');
-                              setNewDiscountPercent(0);
-                              setNewDiscountFreeShipping(false);
-                              setNewDiscountValidUntil('');
-                            }}
-                            className="btn btn-ghost btn-sm"
-                          >
-                            Avbryt
-                          </button>
-                        )}
-                      </div>
-                    </form>
-
-                    <h4 style={{ marginBottom: 8, fontSize: '0.85rem' }}>Aktiva rabattkoder</h4>
-                    <div style={{ border: '1px solid var(--border-light)', borderRadius: 4, overflow: 'hidden', background: 'rgba(0,0,0,0.1)' }}>
-                      <table className="custom-table discount-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
-                        <thead>
-                          <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border-light)' }}>
-                            <th style={{ padding: '6px 10px' }}>Kod</th>
-                            <th style={{ padding: '6px 10px' }}>Projekt</th>
-                            <th style={{ padding: '6px 10px' }}>Rabatt</th>
-                            <th style={{ padding: '6px 10px' }}>Fri frakt</th>
-                            <th style={{ padding: '6px 10px' }}>Giltighetstid</th>
-                            <th style={{ padding: '6px 10px', textAlign: 'right' }}>Åtgärder</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {discountCodes.map((dc) => (
-                            <tr key={dc.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                              <td data-label="Kod" style={{ padding: '6px 10px' }}><strong>{dc.code}</strong></td>
-                              <td data-label="Projekt" style={{ padding: '6px 10px' }}><span className="category-tag" style={{ fontSize: '0.7rem', padding: '2px 6px' }}>{dc.project}</span></td>
-                              <td data-label="Rabatt" style={{ padding: '6px 10px' }}><strong style={{ color: 'var(--color-success)' }}>-{dc.discountPercent}%</strong></td>
-                              <td data-label="Fri frakt" style={{ padding: '6px 10px' }}>
-                                {dc.freeShipping ? (
-                                  <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '2px 6px', fontSize: '0.7rem' }}>Ja</span>
-                                ) : (
-                                  <span className="badge" style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-secondary)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '2px 6px', fontSize: '0.7rem' }}>Nej</span>
-                                )}
-                              </td>
-                              <td data-label="Giltighetstid" style={{ padding: '6px 10px' }}>
-                                {(() => {
-                                  if (!dc.validUntil) {
-                                    return (
-                                      <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '2px 6px', fontSize: '0.7rem' }}>
-                                        För alltid
-                                      </span>
-                                    );
-                                  }
-                                  const expired = new Date() > new Date(dc.validUntil);
-                                  if (expired) {
-                                    return (
-                                      <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '2px 6px', fontSize: '0.7rem' }}>
-                                        Utgått ({dc.validUntil.split('T')[0]})
-                                      </span>
-                                    );
-                                  } else {
-                                    return (
-                                      <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '2px 6px', fontSize: '0.7rem' }}>
-                                        Giltig t.o.m {dc.validUntil.split('T')[0]}
-                                      </span>
-                                    );
-                                  }
-                                })()}
-                              </td>
-                              <td data-label="Åtgärder" style={{ padding: '6px 10px', textAlign: 'right' }}>
-                                <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                                  <button
-                                    onClick={() => {
-                                      setEditingDiscountId(dc.id);
-                                      setNewDiscountCode(dc.code);
-                                      setNewDiscountProject(dc.project);
-                                      setNewDiscountPercent(dc.discountPercent);
-                                      setNewDiscountFreeShipping(dc.freeShipping || false);
-                                      setNewDiscountValidUntil(dc.validUntil ? dc.validUntil.split('T')[0] : '');
-                                    }}
-                                    className="btn btn-ghost btn-icon btn-xs"
-                                    title="Redigera"
-                                  >
-                                    <Edit style={{ width: 12, height: 12 }} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteDiscountCode(dc.id, dc.code)}
-                                    className="btn btn-ghost btn-icon btn-xs"
-                                    style={{ color: 'var(--color-danger)' }}
-                                    title="Radera"
-                                  >
-                                    <Trash2 style={{ width: 12, height: 12 }} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                          {discountCodes.length === 0 && (
-                            <tr>
-                              <td colSpan={4} style={{ textAlign: 'center', padding: 15, color: 'var(--text-muted)' }}>
-                                Inga rabattkoder skapade än.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </>
+                </div>
+              </div>
             )}
+          </main>
+        </div>
+      )}
+
+      {/* ==================== LOGIN MODAL ==================== */}
+      <LoginModal
+        isOpen={loginModalOpen}
+        onClose={() => setLoginModalOpen(false)}
+        onLogin={handleLogin}
+        loginError={loginError}
+      />
+
+
+
+
+
+
+
+      {/* ==================== QR CODE MODAL ==================== */}
+      <QRModal
+        isOpen={qrModalOpen}
+        onClose={() => setQrModalOpen(false)}
+        variant={qrVariant}
+        apiBaseUrl={API_BASE_URL}
+      />
+
+      {/* ==================== SETTINGS MODAL ==================== */}
+      {settingsModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-card glass-modal modal-sm" style={{ maxWidth: 400 }}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2>Inställningar</h2>
+              <button className="btn-close" onClick={() => setSettingsModalOpen(false)}><X /></button>
+            </div>
+            <div className="modal-body" style={{ paddingBottom: 10 }}>
+              <h3>Din profil &amp; Lösenord</h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: 15 }}>
+                Uppdatera din e-postadress eller byt ditt lösenord för inloggning till Lagerpro.
+              </p>
+              <button onClick={() => { setProfileEmail(userProfile?.email || ''); setProfileModalOpen(true); }} className="btn btn-primary btn-full" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <User style={{ width: 14, height: 14 }} />
+                <span>Uppdatera profiluppgifter</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1598,91 +1913,112 @@ export default function App() {
         </div>
       )}
 
-      {/* ==================== ADMIN PANEL (USER CRUD) ==================== */}
-      {adminPanelOpen && userProfile?.role === 'admin' && (
-        <div className="modal-overlay">
-          <div className="modal-card glass-modal modal-md" style={{ maxWidth: 600 }}>
-            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2>Admin: Personalhantering</h2>
-              <button className="btn-close" onClick={() => setAdminPanelOpen(false)}><X /></button>
+      
+
+      {/* ==================== PREMIUM GLASSMORPHIC TOASTS ==================== */}
+      <div className="premium-toast-container" style={{
+        position: 'fixed',
+        bottom: 20,
+        right: 20,
+        zIndex: 9999,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+        pointerEvents: 'none'
+      }}>
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            onClick={() => setToasts(prev => prev.filter(x => x.id !== t.id))}
+            style={{
+              padding: '12px 20px',
+              borderRadius: 8,
+              background: t.type === 'success' 
+                ? 'rgba(16, 185, 129, 0.15)' 
+                : t.type === 'error' 
+                  ? 'rgba(239, 68, 68, 0.15)' 
+                  : 'rgba(59, 130, 246, 0.15)',
+              border: t.type === 'success'
+                ? '1px solid rgba(16, 185, 129, 0.3)'
+                : t.type === 'error'
+                  ? '1px solid rgba(239, 68, 68, 0.3)'
+                  : '1px solid rgba(59, 130, 246, 0.3)',
+              color: t.type === 'success'
+                ? 'var(--color-success)'
+                : t.type === 'error'
+                  ? 'var(--color-danger)'
+                  : '#60a5fa',
+              backdropFilter: 'blur(12px)',
+              boxShadow: 'var(--shadow-lg)',
+              pointerEvents: 'auto',
+              cursor: 'pointer',
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              minWidth: 260,
+              maxWidth: 380,
+              animation: 'slideIn 0.3s ease forwards',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10
+            }}
+          >
+            <div style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: t.type === 'success'
+                ? 'var(--color-success)'
+                : t.type === 'error'
+                  ? 'var(--color-danger)'
+                  : '#60a5fa'
+            }} />
+            <div style={{ flex: 1, wordBreak: 'break-word' }}>{t.message}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ==================== PREMIUM GLASSMORPHIC CONFIRM MODAL ==================== */}
+      {confirmState && (
+        <div className="modal-overlay" style={{ zIndex: 10000, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
+          <div className="modal-card glass-modal modal-sm" style={{ maxWidth: 400, animation: 'scaleUp 0.2s ease forwards', background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(20px)', border: '1px solid var(--border-light)', borderRadius: 12, padding: 24, boxShadow: 'var(--shadow-lg)' }}>
+            <div className="modal-header" style={{ borderBottom: '1px solid var(--border-light)', paddingBottom: 12, marginBottom: 15 }}>
+              <h2 style={{ fontSize: '1.2rem', color: 'var(--color-accent)', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+                <Sparkles style={{ width: 18, height: 18, color: 'var(--color-accent)' }} />
+                <span>Bekräfta åtgärd</span>
+              </h2>
             </div>
-            <div className="modal-body" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
-              
-              <div style={{ borderBottom: '1px solid var(--border-light)', paddingBottom: 20, marginBottom: 20 }}>
-                <h3>{editingUserId ? 'Redigera personalkonto' : 'Lägg till personal'}</h3>
-                <form onSubmit={handleSaveUser}>
-                  <div className="input-container" style={{ marginBottom: 12 }}>
-                    <label>E-postadress *</label>
-                    <input type="email" value={adminUserEmail} onChange={(e) => setAdminUserEmail(e.target.value)} disabled={!!editingUserId} required placeholder="T.ex. personal@lagerpro.se..." style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
-                  </div>
-                  
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 15 }}>
-                    <div className="input-container">
-                      <label>Lösenord {editingUserId ? '(valfritt)' : '*'}</label>
-                      <input type="password" value={adminUserPassword} onChange={(e) => setAdminUserPassword(e.target.value)} required={!editingUserId} placeholder="Minst 4 tecken..." style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
-                    </div>
-                    <div className="input-container">
-                      <label>Behörighetsroll</label>
-                      <select value={adminUserRole} onChange={(e) => setAdminUserRole(e.target.value as any)} className="custom-select" style={{ width: '100%', height: 42 }}>
-                        <option value="user">Standardpersonal</option>
-                        <option value="admin">Administratör (Full behörighet)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="input-container" style={{ marginBottom: 15 }}>
-                    <label>Tillåtna Projekt / Kategori-partier (all eller komma-separerad lista)</label>
-                    <input type="text" value={adminUserProjects} onChange={(e) => setAdminUserProjects(e.target.value)} placeholder="T.ex. Krukor, Skor eller all för alla partier..." style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button type="submit" className="btn btn-primary">{editingUserId ? 'Spara ändringar' : 'Skapa användare'}</button>
-                    {editingUserId && (
-                      <button type="button" onClick={() => { setEditingUserId(null); setAdminUserEmail(''); setAdminUserPassword(''); setAdminUserRole('user'); setAdminUserProjects('all'); }} className="btn btn-ghost">Avbryt redigering</button>
-                    )}
-                  </div>
-                </form>
-              </div>
-
-              <div>
-                <h3>Registrerade personalkonton</h3>
-                <div style={{ border: '1px solid var(--border-light)', borderRadius: 4, overflow: 'hidden' }}>
-                  <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
-                    <thead>
-                      <tr style={{ background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border-light)' }}>
-                        <th style={{ padding: '8px 12px' }}>Användare</th>
-                        <th style={{ padding: '8px 12px' }}>Roll</th>
-                        <th style={{ padding: '8px 12px' }}>Tillåtna projekt</th>
-                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>Åtgärder</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {usersList.map((u) => (
-                        <tr key={u.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                          <td style={{ padding: '8px 12px' }}><strong>{u.email}</strong></td>
-                          <td style={{ padding: '8px 12px' }}><span className="badge" style={{ background: u.role === 'admin' ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.05)' }}>{u.role}</span></td>
-                          <td style={{ padding: '8px 12px' }}><code style={{ fontSize: '0.75rem' }}>{u.allowed_projects}</code></td>
-                          <td style={{ padding: '8px 12px', textAlign: 'right' }}>
-                            {u.id !== 1 && u.email !== 'apersson508@gmail.com' ? (
-                              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                                <button onClick={() => { setEditingUserId(u.id); setAdminUserEmail(u.email); setAdminUserRole(u.role); setAdminUserProjects(u.allowed_projects); }} className="btn btn-ghost btn-icon btn-xs"><Edit style={{ width: 14, height: 14 }} /></button>
-                                <button onClick={() => handleDeleteUser(u.id)} className="btn btn-ghost btn-icon btn-xs" style={{ color: 'var(--color-danger)' }}><Trash2 style={{ width: 14, height: 14 }} /></button>
-                              </div>
-                            ) : (
-                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Skyddat huvudkonto</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            <div className="modal-body" style={{ padding: '0 0 20px 0' }}>
+              <p style={{ fontSize: '0.95rem', color: 'var(--text-primary)', lineHeight: 1.5, margin: 0 }}>
+                {confirmState.message}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: '1px solid var(--border-light)', paddingTop: 15 }}>
+              <button
+                type="button"
+                onClick={() => {
+                  confirmState.resolve(false);
+                  setConfirmState(null);
+                }}
+                className="btn btn-ghost btn-sm"
+                style={{ padding: '8px 16px' }}
+              >
+                Avbryt
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  confirmState.resolve(true);
+                  setConfirmState(null);
+                }}
+                className="btn btn-primary btn-sm"
+                style={{ padding: '8px 20px', background: 'var(--color-accent)', borderColor: 'var(--color-accent)' }}
+              >
+                Bekräfta
+              </button>
             </div>
           </div>
         </div>
       )}
-
 
     </div>
   );

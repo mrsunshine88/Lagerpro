@@ -45,9 +45,14 @@ export class SettingsService {
       // Find all products in this project
       const products = await em.find(Product, { category: project }, { populate: ['variants'] });
       for (const p of products) {
+        // Use product's override if defined, otherwise the new category discount
+        const activeDiscount = (p.discountPercent !== null && p.discountPercent !== undefined)
+          ? p.discountPercent
+          : discount;
+
         for (const v of p.variants) {
           if (v.originalPrice > 0) {
-            v.sellingPrice = Math.round(v.originalPrice * (1.0 - discount / 100.0));
+            v.sellingPrice = Math.round(v.originalPrice * (1.0 - activeDiscount / 100.0));
           }
         }
       }
@@ -80,6 +85,10 @@ export class SettingsService {
     const modeSetting = await this.settingRepository.findOne({ key: modeKey });
     const devSetting = await this.settingRepository.findOne({ key: devKey });
     const shipSetting = await this.settingRepository.findOne({ key: shipKey });
+
+    if (!modeSetting && !devSetting && !shipSetting && project !== 'Alla') {
+      return this.getProjectConfig('Alla');
+    }
 
     return {
       checkout_mode: modeSetting?.value || 'booking',
@@ -208,7 +217,10 @@ export class SettingsService {
 
         const variant = new Variant();
         variant.product = product;
-        variant.sku = 'PLACEHOLDER';
+        
+        const cleanName = name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 5);
+        variant.sku = `PLACEHOLDER-${cleanName}-${Date.now()}`;
+        
         variant.size = 'Standard';
         variant.color = 'Universal';
         variant.stock = 0;

@@ -3,6 +3,25 @@ import { ProductsService } from './products.service.js';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { Roles } from '../auth/roles.decorator.js';
+import * as fs from 'fs';
+import * as path from 'path';
+
+function resolveImageUrl(product: any): string | null {
+  if (product.imageUrl) return product.imageUrl;
+  const staticPath = path.join(process.cwd(), '..', 'static', 'shoe_images');
+  const variants = product.variants?.getItems ? product.variants.getItems() : product.variants || [];
+  for (const v of variants) {
+    if (v.sku) {
+      if (fs.existsSync(path.join(staticPath, `${v.sku}.png`))) {
+        return `/static/shoe_images/${v.sku}.png`;
+      } else if (fs.existsSync(path.join(staticPath, `${v.sku}.jpg`))) {
+        return `/static/shoe_images/${v.sku}.jpg`;
+      }
+    }
+  }
+  return null;
+}
+
 
 @Controller('api')
 export class ProductsController {
@@ -18,6 +37,10 @@ export class ProductsController {
       category: p.category,
       description: p.description,
       createdAt: p.createdAt,
+      imageUrl: resolveImageUrl(p),
+      discount_percent: p.discountPercent,
+      variantLabel1: p.variantLabel1,
+      variantLabel2: p.variantLabel2,
       variants: p.variants.getItems().map((v) => ({
         id: v.id,
         size: v.size,
@@ -41,6 +64,10 @@ export class ProductsController {
       category: p.category,
       description: p.description,
       createdAt: p.createdAt,
+      imageUrl: resolveImageUrl(p),
+      discount_percent: p.discountPercent,
+      variantLabel1: p.variantLabel1,
+      variantLabel2: p.variantLabel2,
       variants: p.variants.getItems().map((v) => ({
         id: v.id,
         size: v.size,
