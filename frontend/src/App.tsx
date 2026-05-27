@@ -189,13 +189,13 @@ export default function App() {
 
   const [settingsActiveTab, setSettingsActiveTab] = useState<'profile' | 'projects' | 'discount_codes' | 'swish' | 'paypal' | 'simulation'>('profile');
 
-  // Project e-commerce configs in settings modal
   const [settingCheckoutMode, setSettingCheckoutMode] = useState('booking');
   const [settingDeliveryMethod, setSettingDeliveryMethod] = useState('pickup');
   const [settingShippingCost, setSettingShippingCost] = useState<number | ''>(0);
+  const [settingPublicVisible, setSettingPublicVisible] = useState(true);
 
   // Map of project configurations loaded publicly for catalog
-  const [projectConfigs, setProjectConfigs] = useState<Record<string, { checkout_mode: string; delivery_method: string; shipping_cost: number }>>({});
+  const [projectConfigs, setProjectConfigs] = useState<Record<string, { checkout_mode: string; delivery_method: string; shipping_cost: number; public_visible?: boolean }>>({});
 
   // Admin User Panel
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
@@ -253,6 +253,14 @@ export default function App() {
       fetchProducts();
       fetchBookings();
       fetchProjects();
+      
+      // Fetch public swish info for POS
+      axios.get(`${API_BASE_URL}/api/public/settings/swish-info`).then(res => {
+        if (res.data && res.data.merchant_id) {
+          setSwishMerchantId(res.data.merchant_id);
+        }
+      }).catch(() => {});
+
       if (userProfile.role === 'admin') {
         fetchAnalytics();
         fetchUsers();
@@ -393,7 +401,7 @@ export default function App() {
 
 
   // POS Checkout
-  const handlePOSCheckout = async () => {
+  const handlePOSCheckout = async (paymentMethod?: string) => {
     if (cart.length === 0) return;
     try {
       const items = cart.map((item) => ({
@@ -401,7 +409,7 @@ export default function App() {
         quantity: item.quantity,
         selling_price: item.selling_price
       }));
-      await axios.post(`${API_BASE_URL}/api/pos/checkout`, { items }, getAxiosConfig());
+      await axios.post(`${API_BASE_URL}/api/pos/checkout`, { items, paymentMethod }, getAxiosConfig());
       setCart([]);
       fetchProducts();
       if (userProfile?.role === 'admin') fetchAnalytics();
@@ -528,17 +536,18 @@ export default function App() {
           project: selectedSettingProject,
           checkout_mode: settingCheckoutMode,
           delivery_method: settingDeliveryMethod,
-          shipping_cost: settingShippingCost === '' ? 0 : settingShippingCost
+          shipping_cost: settingShippingCost === '' ? 0 : settingShippingCost,
+          public_visible: settingPublicVisible
         },
         getAxiosConfig()
       );
 
-      // Force refresh of public configurations map
       const configs = { ...projectConfigs };
       configs[selectedSettingProject] = {
         checkout_mode: settingCheckoutMode,
         delivery_method: settingDeliveryMethod,
-        shipping_cost: settingShippingCost === '' ? 0 : settingShippingCost
+        shipping_cost: settingShippingCost === '' ? 0 : settingShippingCost,
+        public_visible: settingPublicVisible
       };
       setProjectConfigs(configs);
 
@@ -827,6 +836,7 @@ export default function App() {
           setSettingCheckoutMode(res.data.checkout_mode || 'booking');
           setSettingDeliveryMethod(res.data.delivery_method || 'pickup');
           setSettingShippingCost(res.data.shipping_cost || 0);
+          setSettingPublicVisible(res.data.public_visible !== false); // Default to true
         })
         .catch(() => {});
 
@@ -1050,6 +1060,8 @@ export default function App() {
                 getAxiosConfig={getAxiosConfig}
                 hasAllAccess={userProfile?.role === 'admin' || userProfile?.allowed_projects === 'all'}
                 projectsList={allowedProjectsList}
+                projectConfigs={projectConfigs}
+                swishMerchantId={swishMerchantId}
               />
             )}
 
@@ -1385,6 +1397,19 @@ export default function App() {
                                 </label>
                               </div>
                             </div>
+                          </div>
+
+                          <div className="input-container" style={{ marginBottom: 15 }}>
+                            <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Kundportal Synlighet</label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: '0.85rem', background: 'rgba(255,255,255,0.02)', padding: 12, borderRadius: 6, border: '1px solid var(--border-light)' }}>
+                              <input
+                                type="checkbox"
+                                checked={settingPublicVisible}
+                                onChange={(e) => setSettingPublicVisible(e.target.checked)}
+                                style={{ width: 16, height: 16, accentColor: 'var(--color-primary)', cursor: 'pointer' }}
+                              />
+                              <span>Kundportal (Visa varor för detta projekt)</span>
+                            </label>
                           </div>
 
                           {(settingDeliveryMethod === 'shipping' || settingDeliveryMethod === 'shipping_pickup') && (

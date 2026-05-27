@@ -121,14 +121,14 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
         </div>
 
         <div className="be-progress-wrapper">
-          <div className="be-progress-labels" style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 6 }}>
-            <span>Start (0%)</span>
-            <span style={{ fontWeight: 600, color: 'var(--color-primary)' }}>
+          <div className="be-progress-labels" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 10 }}>
+            <span style={{ color: 'rgba(255,255,255,0.4)', fontWeight: 600, background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: 4 }}>Start (0%)</span>
+            <span style={{ fontWeight: 700, color: 'white', background: 'var(--color-primary)', padding: '2px 10px', borderRadius: 12, boxShadow: '0 2px 8px rgba(99, 102, 241, 0.4)' }}>
               {analytics.break_even.total_investment > 0
                 ? Math.round((analytics.break_even.total_revenue / analytics.break_even.total_investment) * 100)
-                : 0}%
+                : 0}% Återvunnet
             </span>
-            <span>Break-Even (100%+)</span>
+            <span style={{ color: '#fbbf24', fontWeight: 800, background: 'rgba(245, 158, 11, 0.1)', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(245, 158, 11, 0.2)', boxShadow: '0 0 10px rgba(245, 158, 11, 0.1)' }}>Break-Even (100%+)</span>
           </div>
           <div className="be-progress-track" style={{ width: '100%', height: 10, background: 'rgba(255,255,255,0.05)', borderRadius: 5, overflow: 'hidden', marginBottom: 10 }}>
             <div

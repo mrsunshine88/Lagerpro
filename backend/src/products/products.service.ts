@@ -47,8 +47,21 @@ export class ProductsService {
       orderBy: { id: 'DESC', variants: { size: 'ASC', color: 'ASC' } },
     });
 
-    // Only return products that have at least one bookable variant
+    // Fetch all public visibility settings
+    const visibleSettings = await this.em.find(Setting, { key: { $like: 'public_visible_%' } });
+    const hiddenProjects = new Set(
+      visibleSettings
+        .filter(s => s.value === 'false')
+        .map(s => s.key.replace('public_visible_', ''))
+    );
+
+    // Only return products that have at least one bookable variant and belong to a visible project
     return products.filter((product) => {
+      // Check if project is hidden
+      if (hiddenProjects.has(product.category)) {
+        return false;
+      }
+
       const activeVariants = product.variants.getItems().filter((v) => v.stock > 0);
       if (activeVariants.length > 0) {
         // Filter in-memory to only include the active ones
@@ -110,15 +123,19 @@ export class ProductsService {
         }
 
         // Generate SKU if not provided
-        if (v.sku) {
-          variant.sku = v.sku;
-        } else {
-          const cleanName = product.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase();
-          const cleanColor = (variant.color || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase() || 'UNI';
-          const cleanSize = (variant.size || '').replace(/[^a-zA-Z0-9]/g, '') || 'U';
-          const timestamp = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-          variant.sku = `LGR-${cleanName}-${cleanSize}-${cleanColor}-${timestamp}`;
-        }
+          if (v.sku) {
+            variant.sku = v.sku;
+          } else {
+            const prefix = '200'; // 200 is for internal retail use
+            const randomPart = Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
+            const base = prefix + randomPart;
+            let sum = 0;
+            for (let i = 0; i < 12; i++) {
+              sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
+            }
+            const checksum = (10 - (sum % 10)) % 10;
+            variant.sku = base + checksum.toString();
+          }
 
         em.persist(variant);
 
@@ -217,7 +234,19 @@ export class ProductsService {
           variant.originalPrice = originalPrice;
           variant.size = v.size || '';
           variant.color = v.color || '';
-          if (v.sku) variant.sku = v.sku;
+          if (v.sku) {
+            variant.sku = v.sku;
+          } else {
+            const prefix = '200';
+            const randomPart = Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
+            const base = prefix + randomPart;
+            let sum = 0;
+            for (let i = 0; i < 12; i++) {
+              sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
+            }
+            const checksum = (10 - (sum % 10)) % 10;
+            variant.sku = base + checksum.toString();
+          }
         } else {
           // Insert new variant
           const variant = new Variant();
@@ -232,11 +261,15 @@ export class ProductsService {
           if (v.sku) {
             variant.sku = v.sku;
           } else {
-            const cleanName = product.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase();
-            const cleanColor = (variant.color || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 3).toUpperCase() || 'UNI';
-            const cleanSize = (variant.size || '').replace(/[^a-zA-Z0-9]/g, '') || 'U';
-            const timestamp = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-            variant.sku = `LGR-${cleanName}-${cleanSize}-${cleanColor}-${timestamp}`;
+            const prefix = '200';
+            const randomPart = Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
+            const base = prefix + randomPart;
+            let sum = 0;
+            for (let i = 0; i < 12; i++) {
+              sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
+            }
+            const checksum = (10 - (sum % 10)) % 10;
+            variant.sku = base + checksum.toString();
           }
 
           em.persist(variant);

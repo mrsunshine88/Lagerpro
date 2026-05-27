@@ -2387,9 +2387,11 @@ body {
 }
 
 /* Dölj mobilknappar på desktop (visas bara i @media + body.pos-tab-active) */
-.pos-mobile-cart-btn,
-.pos-mobile-back-btn {
-    display: none !important;
+@media (min-width: 577px) {
+    .pos-mobile-cart-btn,
+    .pos-mobile-back-btn {
+        display: none !important;
+    }
 }
 
 /* Cart close X button - only shown on mobile via @media rule */

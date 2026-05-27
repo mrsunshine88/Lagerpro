@@ -19,11 +19,13 @@ interface PosTabProps {
   updateCartQty: (variantId: number, qty: number) => void;
   clearPosCart: () => void;
   updatePosOrderDiscount: (discount: number) => void;
-  handlePOSCheckout: () => Promise<void>;
+  handlePOSCheckout: (paymentMethod?: string) => Promise<void>;
   apiBaseUrl: string;
   getAxiosConfig: () => any;
   hasAllAccess?: boolean;
   projectsList?: string[];
+  projectConfigs?: Record<string, { checkout_mode: string; delivery_method: string; shipping_cost: number }>;
+  swishMerchantId?: string;
 }
 
 export const PosTab: React.FC<PosTabProps> = ({
@@ -39,6 +41,8 @@ export const PosTab: React.FC<PosTabProps> = ({
   getAxiosConfig,
   hasAllAccess = false,
   projectsList = [],
+  projectConfigs = {},
+  swishMerchantId = '',
 }) => {
   // --- POS TAB SPECIFIC VISUAL STATES ---
   const [posShowCartMobile, setPosShowCartMobile] = useState(false);
@@ -50,6 +54,9 @@ export const PosTab: React.FC<PosTabProps> = ({
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const [scanSkuInput, setScanSkuInput] = useState('');
   const [scanMessage, setScanMessage] = useState('');
+
+  // --- SWISH POS STATES ---
+  const [swishModalOpen, setSwishModalOpen] = useState(false);
 
   // Categories list – use projectsList if available so empty projects appear too
   const categoriesList = projectsList.length > 0
@@ -78,6 +85,18 @@ export const PosTab: React.FC<PosTabProps> = ({
     0
   );
   const cartSavings = cartOriginalTotal - cartCurrentTotal;
+
+  // Determine if Swish should be available based on cart items and project configs
+  const isSwishEnabledInCart = cart.length > 0 && cart.some(item => {
+    const config = projectConfigs[item.product.category] || projectConfigs['Alla'];
+    return config && (config.checkout_mode === 'ecommerce' || config.checkout_mode === 'both');
+  });
+
+  // Generate Swish QR URL if modal is open
+  // Format: C{merchantId};{amount};{message};0
+  // API: https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=...
+  const swishQrData = `C${swishMerchantId};${cartCurrentTotal};Kassa;0`;
+  const swishQrUrl = swishMerchantId ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(swishQrData)}` : '';
 
   // Handle Scan Submit
   const handleBarcodeScan = async (e: React.FormEvent) => {
@@ -225,14 +244,23 @@ export const PosTab: React.FC<PosTabProps> = ({
         {/* Right Side: POS Checkout Cart */}
         <div className="pos-cart-panel glass-card" style={{ padding: 20, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: 'fit-content' }}>
           <div>
-            <button
-              onClick={() => setPosShowCartMobile(false)}
-              className="pos-mobile-back-btn"
-              style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}
-            >
-              <ArrowRight style={{ width: 14, height: 14, transform: 'rotate(180deg)' }} />
-              <span>Tillbaka till produkter</span>
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <button
+                onClick={() => setPosShowCartMobile(false)}
+                className="pos-mobile-back-btn"
+                style={{ margin: 0 }}
+              >
+                <ArrowRight style={{ width: 14, height: 14, transform: 'rotate(180deg)' }} />
+                <span>Tillbaka</span>
+              </button>
+              <button
+                onClick={() => setPosShowCartMobile(false)}
+                className="pos-cart-close-x"
+                aria-label="Stäng varukorg"
+              >
+                <X />
+              </button>
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, borderBottom: '1px solid var(--border-light)', paddingBottom: 10 }}>
               <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <ShoppingBag style={{ color: 'var(--color-primary)' }} />
@@ -292,10 +320,20 @@ export const PosTab: React.FC<PosTabProps> = ({
               <span>Summa att betala:</span>
               <span>{cartCurrentTotal} kr</span>
             </div>
-            <button onClick={handlePOSCheckout} disabled={cart.length === 0} className="btn btn-primary btn-full btn-lg" style={{ padding: 14, fontWeight: 700 }}>
-              <CheckCircle2 style={{ width: 16, height: 16 }} />
-              <span>Slutför &amp; Registrera Köp</span>
-            </button>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button onClick={() => handlePOSCheckout('paypal')} disabled={cart.length === 0} className="btn btn-primary btn-full btn-lg" style={{ padding: 14, fontWeight: 700, background: '#0070ba', borderColor: '#0070ba' }}>
+                <CheckCircle2 style={{ width: 16, height: 16 }} />
+                <span>Betalt via PayPal</span>
+              </button>
+
+              {isSwishEnabledInCart && swishMerchantId && (
+                <button onClick={() => setSwishModalOpen(true)} disabled={cart.length === 0} className="btn btn-primary btn-full btn-lg" style={{ padding: 14, fontWeight: 700, background: '#22c55e', borderColor: '#22c55e', color: 'white' }}>
+                  <img src="https://www.getswish.se/content/uploads/2021/04/Swish-Logo-Primary-Light-BG.png" alt="Swish" style={{ height: 16, objectFit: 'contain' }} />
+                  <span>Betala med Swish</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
         
@@ -338,6 +376,43 @@ export const PosTab: React.FC<PosTabProps> = ({
                   {scanMessage}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== SWISH QR MODAL ==================== */}
+      {swishModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-card glass-modal modal-sm" style={{ maxWidth: 400, textAlign: 'center' }}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2>Swish-betalning</h2>
+              <button className="btn-close" onClick={() => setSwishModalOpen(false)}><X /></button>
+            </div>
+            <div className="modal-body" style={{ padding: '20px 0' }}>
+              <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--color-success)', marginBottom: 20 }}>
+                {cartCurrentTotal} kr
+              </h3>
+              
+              <div style={{ background: 'white', padding: 15, borderRadius: 10, display: 'inline-block', marginBottom: 25 }}>
+                <img src={swishQrUrl} alt="Swish QR Code" style={{ width: 220, height: 220, display: 'block' }} />
+              </div>
+              
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: 25, padding: '0 20px' }}>
+                Be kunden scanna QR-koden ovan med sin Swish-app. När betalningen är mottagen klickar du på knappen nedan för att slutföra.
+              </p>
+
+              <button 
+                onClick={() => {
+                  setSwishModalOpen(false);
+                  handlePOSCheckout('swish');
+                }} 
+                className="btn btn-success btn-full btn-lg" 
+                style={{ fontWeight: 700 }}
+              >
+                <CheckCircle2 style={{ width: 18, height: 18 }} />
+                Betalning Mottagen (Slutför)
+              </button>
             </div>
           </div>
         </div>

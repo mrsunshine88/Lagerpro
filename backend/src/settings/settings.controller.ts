@@ -160,12 +160,14 @@ export class SettingsController {
       checkout_mode: string;
       delivery_method: string;
       shipping_cost: number;
+      public_visible?: boolean;
     },
   ) {
     await this.settingsService.setProjectConfig(body.project, {
       checkout_mode: body.checkout_mode,
       delivery_method: body.delivery_method,
       shipping_cost: parseFloat(body.shipping_cost as any || 0.0),
+      public_visible: body.public_visible !== false, // default to true
     });
     return { success: true };
   }
@@ -175,6 +177,12 @@ export class SettingsController {
   @Get('settings/swish')
   async getSwishConfig() {
     return this.settingsService.getSwishConfig();
+  }
+
+  @Get('public/settings/swish-info')
+  async getPublicSwishInfo() {
+    const config = await this.settingsService.getSwishConfig();
+    return { merchant_id: config.merchant_id };
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

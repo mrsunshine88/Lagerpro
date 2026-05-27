@@ -192,36 +192,36 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({
           <div className="modal-content glass-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 500, padding: 0, overflow: 'hidden' }}>
             
             {/* Modal Header */}
-            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '20px 24px', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ background: 'linear-gradient(135deg, #6366f1, #a855f7)', padding: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', color: 'white', borderTopLeftRadius: 'var(--radius-lg)', borderTopRightRadius: 'var(--radius-lg)', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' }}>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-                  <h2 style={{ margin: 0, fontSize: '1.4rem' }}>{selectedBooking.customer_first_name} {selectedBooking.customer_last_name}</h2>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', background: 'rgba(0,0,0,0.3)', padding: '2px 6px', borderRadius: 4 }}>#{selectedBooking.id}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+                  <h2 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, letterSpacing: '-0.02em', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{selectedBooking.customer_first_name} {selectedBooking.customer_last_name}</h2>
+                  <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.9)', background: 'rgba(0,0,0,0.2)', padding: '4px 8px', borderRadius: 6, fontWeight: 600, border: '1px solid rgba(255,255,255,0.1)' }}>#{selectedBooking.id}</span>
                 </div>
-                <a href={`tel:${selectedBooking.customer_phone}`} style={{ color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.9rem', textDecoration: 'none' }}>
+                <a href={`tel:${selectedBooking.customer_phone}`} style={{ color: 'white', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.95rem', textDecoration: 'none', background: 'rgba(255,255,255,0.15)', padding: '6px 12px', borderRadius: 20, transition: 'background 0.2s' }}>
                   <Phone style={{ width: 14, height: 14 }} />
                   {selectedBooking.customer_phone}
                 </a>
               </div>
-              <button onClick={() => setSelectedBooking(null)} className="btn btn-ghost" style={{ padding: 4, margin: -4 }}>
+              <button onClick={() => setSelectedBooking(null)} className="btn btn-ghost" style={{ padding: 6, margin: -6, color: 'white', background: 'rgba(0,0,0,0.1)', borderRadius: '50%' }}>
                 <X style={{ width: 20, height: 20 }} />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div style={{ padding: '24px' }}>
+            <div style={{ padding: '30px 24px', background: 'var(--bg-card)' }}>
               
               {/* Product Info */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 20 }}>
-                <div style={{ width: 40, height: 40, borderRadius: 8, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Package style={{ width: 20, height: 20, color: 'var(--text-secondary)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 12, border: '1px solid var(--border-light)' }}>
+                <div style={{ width: 48, height: 48, borderRadius: 10, background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1))', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1px solid rgba(168, 85, 247, 0.2)' }}>
+                  <Package style={{ width: 24, height: 24, color: '#a855f7' }} />
                 </div>
-                <div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{selectedBooking.product_name}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{selectedBooking.product_name}</div>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', flexWrap: 'wrap', gap: '8px 12px' }}>
-                    <span>St: <strong>{selectedBooking.size}</strong></span>
-                    <span>Färg: <strong>{selectedBooking.color || 'Uni'}</strong></span>
-                    <span>SKU: {selectedBooking.sku}</span>
+                    <span style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: 4 }}>St: <strong style={{ color: 'white' }}>{selectedBooking.size}</strong></span>
+                    <span style={{ background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: 4 }}>Färg: <strong style={{ color: 'white' }}>{selectedBooking.color || 'Uni'}</strong></span>
+                    <span style={{ color: 'var(--text-muted)' }}>SKU: {selectedBooking.sku}</span>
                   </div>
                 </div>
               </div>
@@ -242,40 +242,44 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid var(--border-light)' }}>
                 
                 {/* Left Column: Delivery */}
-                <div>
-                  <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 700 }}>Leverans</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <MapPin style={{ width: 16, height: 16, color: 'var(--text-secondary)' }} />
-                    <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>
+                <div style={{ background: 'rgba(0,0,0,0.2)', padding: 16, borderRadius: 10, border: '1px solid rgba(255,255,255,0.03)' }}>
+                  <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-muted)', marginBottom: 12, fontWeight: 800 }}>Leverans</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <div style={{ padding: 6, background: 'rgba(59, 130, 246, 0.1)', borderRadius: '50%' }}>
+                      <MapPin style={{ width: 16, height: 16, color: '#60a5fa' }} />
+                    </div>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: 'white' }}>
                       {selectedBooking.delivery_method === 'shipping' ? 'PostNord' : 'Hämtas i butik'}
                     </span>
                   </div>
                   {selectedBooking.delivery_method === 'shipping' && selectedBooking.shipping_address && (
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginLeft: 24, lineHeight: 1.4 }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginLeft: 34, lineHeight: 1.5, background: 'rgba(255,255,255,0.03)', padding: 8, borderRadius: 6 }}>
                       {selectedBooking.shipping_address}
                     </div>
                   )}
                 </div>
 
                 {/* Right Column: Payment */}
-                <div>
-                  <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 700 }}>Betalning</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <CreditCard style={{ width: 16, height: 16, color: 'var(--text-secondary)' }} />
-                    <span style={{ fontSize: '0.9rem', fontWeight: 500 }}>
+                <div style={{ background: 'rgba(0,0,0,0.2)', padding: 16, borderRadius: 10, border: '1px solid rgba(255,255,255,0.03)' }}>
+                  <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-muted)', marginBottom: 12, fontWeight: 800 }}>Betalning</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <div style={{ padding: 6, background: 'rgba(16, 185, 129, 0.1)', borderRadius: '50%' }}>
+                      <CreditCard style={{ width: 16, height: 16, color: '#34d399' }} />
+                    </div>
+                    <span style={{ fontSize: '0.95rem', fontWeight: 600, color: 'white' }}>
                       {selectedBooking.payment_status === 'paid' ? 'Betald (Swish)' : selectedBooking.payment_status === 'refunded' ? 'Återbetald' : 'Ej betald (Butik)'}
                     </span>
                   </div>
-                  <div style={{ marginLeft: 24 }}>
-                    <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{selectedBooking.selling_price} kr</div>
+                  <div style={{ marginLeft: 34, marginTop: 8 }}>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--color-primary)' }}>{selectedBooking.selling_price} kr</div>
                     {selectedBooking.discount_code && (
-                      <div style={{ fontSize: '0.8rem', color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, background: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: 4, width: 'max-content' }}>
                         <Tag style={{ width: 12, height: 12 }} />
                         {selectedBooking.discount_code} (-{selectedBooking.discount_percent}%)
                       </div>
                     )}
                     {selectedBooking.shipping_cost !== undefined && selectedBooking.shipping_cost > 0 && (
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>
                         + Frakt {selectedBooking.shipping_cost} kr
                       </div>
                     )}

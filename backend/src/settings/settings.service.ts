@@ -77,16 +77,18 @@ export class SettingsService {
     await this.em.flush();
   }
 
-  async getProjectConfig(project: string): Promise<{ checkout_mode: string; delivery_method: string; shipping_cost: number }> {
+  async getProjectConfig(project: string): Promise<{ checkout_mode: string; delivery_method: string; shipping_cost: number; public_visible: boolean }> {
     const modeKey = `checkout_mode_${project}`;
     const devKey = `delivery_method_${project}`;
     const shipKey = `shipping_cost_${project}`;
+    const visibleKey = `public_visible_${project}`;
 
     const modeSetting = await this.settingRepository.findOne({ key: modeKey });
     const devSetting = await this.settingRepository.findOne({ key: devKey });
     const shipSetting = await this.settingRepository.findOne({ key: shipKey });
+    const visibleSetting = await this.settingRepository.findOne({ key: visibleKey });
 
-    if (!modeSetting && !devSetting && !shipSetting && project !== 'Alla') {
+    if (!modeSetting && !devSetting && !shipSetting && !visibleSetting && project !== 'Alla') {
       return this.getProjectConfig('Alla');
     }
 
@@ -94,12 +96,13 @@ export class SettingsService {
       checkout_mode: modeSetting?.value || 'booking',
       delivery_method: devSetting?.value || 'pickup',
       shipping_cost: shipSetting?.value ? parseFloat(shipSetting.value) : 0.0,
+      public_visible: visibleSetting?.value ? visibleSetting.value === 'true' : true, // default to true
     };
   }
 
   async setProjectConfig(
     project: string,
-    config: { checkout_mode: string; delivery_method: string; shipping_cost: number },
+    config: { checkout_mode: string; delivery_method: string; shipping_cost: number; public_visible?: boolean },
   ): Promise<void> {
     await this.em.transactional(async (em) => {
       const modeKey = `checkout_mode_${project}`;
@@ -132,6 +135,16 @@ export class SettingsService {
         em.persist(shipSetting);
       }
       shipSetting.value = config.shipping_cost.toString();
+
+      // Save public visibility
+      const visibleKey = `public_visible_${project}`;
+      let visibleSetting = await em.findOne(Setting, { key: visibleKey });
+      if (!visibleSetting) {
+        visibleSetting = new Setting();
+        visibleSetting.key = visibleKey;
+        em.persist(visibleSetting);
+      }
+      visibleSetting.value = config.public_visible !== false ? 'true' : 'false';
     });
   }
 

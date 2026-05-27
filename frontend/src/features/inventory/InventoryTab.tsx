@@ -30,6 +30,7 @@ interface InventoryTabProps {
   apiBaseUrl: string;
   getAxiosConfig: () => any;
   stockMetricsTotalCost: number; // passed down or calculated
+  totalSoldUnits?: number;
 }
 
 export const InventoryTab: React.FC<InventoryTabProps> = ({
@@ -44,6 +45,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
   apiBaseUrl,
   getAxiosConfig,
   stockMetricsTotalCost,
+  totalSoldUnits,
 }) => {
   // --- FILTERS & SEARCH STATE ---
   const [searchQuery, setSearchQuery] = useState('');
@@ -331,7 +333,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
           </div>
           <div className="stat-info">
             <h3>Sålda enheter</h3>
-            <p>{stockMetricsTotalCost > 0 ? 'Se Ekonomi' : 'Aktiva'}</p>
+            <p>{totalSoldUnits !== undefined && totalSoldUnits > 0 ? totalSoldUnits : (stockMetricsTotalCost > 0 ? 'Se Ekonomi' : '0')}</p>
             <span>produkter</span>
           </div>
         </div>
