@@ -3796,4 +3796,19 @@ body {
     font-weight: 700 !important;
 }
 
-
+@media (max-width: 768px) {
+    .pdp-mobile-fullscreen {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        z-index: 9999 !important;
+        overflow-y: auto !important;
+        border-radius: 0 !important;
+        background: var(--bg-main) !important;
+        margin: 0 !important;
+        border: none !important;
+        padding-bottom: 50px !important;
+    }
+}

@@ -17,6 +17,12 @@ export class Product {
   description?: string;
 
   @Property({ nullable: true })
+  brand?: string;
+
+  @Property({ default: false })
+  isSponsored: boolean = false;
+
+  @Property({ nullable: true })
   imageUrl?: string;
 
   @Property({ defaultRaw: 'CURRENT_TIMESTAMP' })

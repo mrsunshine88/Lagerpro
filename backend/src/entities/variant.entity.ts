@@ -24,6 +24,9 @@ export class Variant {
   @Property({ nullable: true })
   color?: string;
 
+  @Property({ nullable: true })
+  imageUrl?: string;
+
   @Property({ type: 'float', default: 0.0 })
   purchasePrice = 0.0;
 

@@ -112,6 +112,8 @@ def init_db():
                 name TEXT NOT NULL,
                 category TEXT NOT NULL,
                 description TEXT,
+                brand TEXT,
+                is_sponsored BOOLEAN DEFAULT FALSE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -125,6 +127,7 @@ def init_db():
                 stock INTEGER DEFAULT 0,
                 size TEXT,
                 color TEXT,
+                image_url TEXT,
                 purchase_price REAL DEFAULT 0.0,
                 selling_price REAL DEFAULT 0.0,
                 original_price REAL DEFAULT 0.0,
@@ -201,6 +204,21 @@ def init_db():
             conn.execute("ALTER TABLE variants ADD COLUMN IF NOT EXISTS selling_price REAL DEFAULT 0.0")
         except Exception:
             pass # Already exists or table not ready
+
+        try:
+            conn.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS brand TEXT")
+        except Exception:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS is_sponsored BOOLEAN DEFAULT FALSE")
+        except Exception:
+            pass
+
+        try:
+            conn.execute("ALTER TABLE variants ADD COLUMN IF NOT EXISTS image_url TEXT")
+        except Exception:
+            pass
             
         conn.commit()
 
@@ -413,6 +431,8 @@ def add_product():
     name = data.get('name')
     category = data.get('category', 'Skor')
     description = data.get('description', '')
+    brand = data.get('brand', '')
+    is_sponsored = bool(data.get('is_sponsored', False))
     variants = data.get('variants', [])
     
     if not name:
@@ -427,8 +447,8 @@ def add_product():
         discount = float(discount_row[0]) if discount_row and discount_row[0] else 0.0
 
         cursor.execute(
-            "INSERT INTO products (name, category, description) VALUES (?, ?, ?)",
-            (name, category, description)
+            "INSERT INTO products (name, category, description, brand, is_sponsored) VALUES (?, ?, ?, ?, ?)",
+            (name, category, description, brand, is_sponsored)
         )
         product_id = cursor.lastrowid
         
@@ -445,6 +465,7 @@ def add_product():
                 s_price = float(v.get('selling_price', 0.0))
             
             sku = v.get('sku')
+            image_url = v.get('image_url', '')
             if not sku:
                 clean_name = re.sub(r'[^a-zA-Z0-9]', '', name)[:4].upper()
                 clean_color = re.sub(r'[^a-zA-Z0-9]', '', color)[:3].upper() if color else "UNI"
@@ -453,8 +474,8 @@ def add_product():
                 sku = f"LGR-{clean_name}-{clean_size}-{clean_color}-{timestamp}"
                 
             cursor.execute(
-                "INSERT INTO variants (product_id, sku, stock, size, color, purchase_price, selling_price, original_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (product_id, sku, stock, size, color, p_price, s_price, orig_price)
+                "INSERT INTO variants (product_id, sku, stock, size, color, purchase_price, selling_price, original_price, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (product_id, sku, stock, size, color, p_price, s_price, orig_price, image_url)
             )
             
             # Log initial stock as purchase transaction
@@ -666,6 +687,8 @@ def edit_product_api(product_id):
     name = data.get('name')
     category = data.get('category', 'Skor')
     description = data.get('description', '')
+    brand = data.get('brand', '')
+    is_sponsored = bool(data.get('is_sponsored', False))
     variants = data.get('variants', [])
     
     if not name:
@@ -686,8 +709,8 @@ def edit_product_api(product_id):
             
         # Update product metadata
         cursor.execute(
-            "UPDATE products SET name = ?, category = ?, description = ? WHERE id = ?",
-            (name, category, description, product_id)
+            "UPDATE products SET name = ?, category = ?, description = ?, brand = ?, is_sponsored = ? WHERE id = ?",
+            (name, category, description, brand, is_sponsored, product_id)
         )
         
         # Get existing variants of this product
@@ -709,6 +732,7 @@ def edit_product_api(product_id):
                 s_price = float(v.get('selling_price', 0.0))
                 
             sku = v.get('sku')
+            image_url = v.get('image_url', '')
             
             if not sku:
                 clean_name = re.sub(r'[^a-zA-Z0-9]', '', name)[:4].upper()
@@ -726,8 +750,8 @@ def edit_product_api(product_id):
                 
                 # Update existing variant
                 cursor.execute(
-                    "UPDATE variants SET sku = ?, stock = ?, size = ?, color = ?, purchase_price = ?, selling_price = ?, original_price = ? WHERE id = ?",
-                    (sku, stock, size, color, p_price, s_price, orig_price, v_id)
+                    "UPDATE variants SET sku = ?, stock = ?, size = ?, color = ?, purchase_price = ?, selling_price = ?, original_price = ?, image_url = ? WHERE id = ?",
+                    (sku, stock, size, color, p_price, s_price, orig_price, image_url, v_id)
                 )
                 
                 # Log adjustment transaction if stock changed
@@ -740,8 +764,8 @@ def edit_product_api(product_id):
             else:
                 # Insert new variant
                 cursor.execute(
-                    "INSERT INTO variants (product_id, sku, stock, size, color, purchase_price, selling_price, original_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (product_id, sku, stock, size, color, p_price, s_price, orig_price)
+                    "INSERT INTO variants (product_id, sku, stock, size, color, purchase_price, selling_price, original_price, image_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (product_id, sku, stock, size, color, p_price, s_price, orig_price, image_url)
                 )
                 new_var_id = cursor.lastrowid
                 
@@ -772,7 +796,7 @@ def get_public_products():
             p_dict = dict(p)
             # Fetch variants that have stock > 0 (only bookable variants)
             variants = conn.execute(
-                "SELECT id, size, color, stock, selling_price, original_price, sku FROM variants WHERE product_id = ? AND stock > 0 ORDER BY size, color", 
+                "SELECT id, size, color, stock, selling_price, original_price, sku, image_url FROM variants WHERE product_id = ? AND stock > 0 ORDER BY size, color", 
                 (p['id'],)
             ).fetchall()
             

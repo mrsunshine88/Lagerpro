@@ -18,7 +18,9 @@ import {
   CreditCard,
   Truck,
   Printer,
-  Download
+  Download,
+  ChevronLeft,
+  ArrowLeft
 } from 'lucide-react';
 import type { Product, Variant } from '../../types';
 
@@ -41,6 +43,10 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
   const [publicCategory, setPublicCategory] = useState('all');
   const [publicSize, setPublicSize] = useState('all');
   const [publicMaxPrice, setPublicMaxPrice] = useState('');
+
+  // --- PDP states ---
+  const [selectedPDPProduct, setSelectedPDPProduct] = useState<any | null>(null);
+  const [pdpSelectedVariantId, setPdpSelectedVariantId] = useState<number | null>(null);
 
   // --- PUBLIC SHOPPING CART states ---
   const [publicCart, setPublicCart] = useState<any[]>([]);
@@ -110,21 +116,20 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
 
   // Lock body scroll when cart modal is open
   useEffect(() => {
-    if (cartModalOpen) {
+    const isMobilePDP = selectedPDPProduct && window.innerWidth <= 768;
+    if (cartModalOpen || isMobilePDP) {
       document.body.style.overflow = 'hidden';
-      document.body.style.position = 'fixed';
-      document.body.style.width = '100%';
+      // Prevent layout shift from scrollbar disappearing
+      document.body.style.paddingRight = `${window.innerWidth - document.documentElement.clientWidth}px`;
     } else {
       document.body.style.overflow = '';
-      document.body.style.position = '';
-      document.body.style.width = '';
+      document.body.style.paddingRight = '';
     }
     return () => {
       document.body.style.overflow = '';
-      document.body.style.position = '';
-      document.body.style.width = '';
+      document.body.style.paddingRight = '';
     };
-  }, [cartModalOpen]);
+  }, [cartModalOpen, selectedPDPProduct]);
 
   // --- SWISH SIMULATOR states ---
   const [paymentStep, setPaymentStep] = useState<'idle' | 'swish_waiting' | 'swish_success' | 'swish_failed' | 'booking_success'>('idle');
@@ -527,6 +532,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
               </select>
             </div>
 
+
             <div className="filter-box" style={{ flex: 1, minWidth: 150, position: 'relative' }}>
               <Tag style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', width: 14, height: 14, pointerEvents: 'none' }} />
               <input type="number" value={publicMaxPrice} onChange={(e) => setPublicMaxPrice(e.target.value)} placeholder="Max pris (kr)" min="0" step="50" style={{ width: '100%', height: 42, padding: '10px 12px 10px 36px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', boxSizing: 'border-box' }} />
@@ -535,119 +541,168 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
         </section>
 
         <section className="products-section">
-          <div id="public-catalog-grid" className="products-grid">
-            {filteredPublicProducts.map((p) => (
-              <div key={p.id} className="glass-card product-card" style={{ padding: 0, overflow: 'hidden' }}>
-                <div className="pos-shoe-photo" style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--border-light)', position: 'relative' }}>
-                  {p.imageUrl ? (
-                    <img src={p.imageUrl} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          {selectedPDPProduct ? (
+            <div className="pdp-container pdp-mobile-fullscreen glass-card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'fadeIn 0.3s ease-out', border: '1px solid var(--border-light)' }}>
+              <div style={{ padding: '20px 30px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center' }}>
+                <button 
+                  onClick={() => { setSelectedPDPProduct(null); setPdpSelectedVariantId(null); }} 
+                  className="btn btn-ghost" 
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px' }}
+                >
+                  <ArrowLeft style={{ width: 18, height: 18 }} />
+                  <span>Tillbaka till katalogen</span>
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+                {/* Image Gallery Side */}
+                <div style={{ flex: '1 1 500px', minWidth: 300, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                  {selectedPDPProduct.variants && selectedPDPProduct.variants.find((v:any) => v.id === pdpSelectedVariantId)?.image_url ? (
+                    <img src={selectedPDPProduct.variants.find((v:any) => v.id === pdpSelectedVariantId)?.image_url} alt={selectedPDPProduct.name} style={{ width: '100%', height: '100%', maxHeight: '600px', objectFit: 'contain' }} />
+                  ) : selectedPDPProduct.imageUrl ? (
+                    <img src={selectedPDPProduct.imageUrl} alt={selectedPDPProduct.name} style={{ width: '100%', height: '100%', maxHeight: '600px', objectFit: 'contain' }} />
                   ) : (
-                    <div style={{ fontSize: '3rem', opacity: 0.3 }}>👟</div>
+                    <div style={{ fontSize: '5rem', opacity: 0.2, padding: '100px 0' }}>👟</div>
+                  )}
+                  {selectedPDPProduct.is_sponsored && (
+                    <span style={{ position: 'absolute', top: 20, left: 20, background: 'rgba(255,255,255,0.9)', color: '#000', padding: '4px 8px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', borderRadius: 4 }}>Sponsrad</span>
                   )}
                 </div>
-                <div style={{ padding: 20 }}>
-                  <div className="product-info-header">
-                    <div>
-                      <span className="category-tag">{p.category}</span>
-                      <h3>{p.name}</h3>
-                    </div>
-                  </div>
-                  {p.description && <p className="product-desc">{p.description}</p>}
-                  
-                  <div className="public-variants-section">
-                    <h4 style={{ marginBottom: 12, color: 'var(--text-secondary)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Välj storlek:</h4>
-                    <div className="variants-list" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 15 }}>
-                      {p.variants.map((v: any) => {
-                        const isSelected = selectedPublicVariants[p.id] === v.id;
-                        return (
-                          <button
-                            key={v.id}
-                            disabled={v.stock <= 0}
-                            onClick={() => setSelectedPublicVariants({ ...selectedPublicVariants, [p.id]: isSelected ? 0 : v.id })}
-                            style={{
-                              padding: '8px 12px',
-                              background: isSelected ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.03)',
-                              border: isSelected ? '1px solid var(--color-accent)' : '1px solid var(--border-light)',
-                              borderRadius: 8,
-                              color: v.stock <= 0 ? 'var(--text-muted)' : isSelected ? 'white' : 'var(--text-primary)',
-                              cursor: v.stock <= 0 ? 'not-allowed' : 'pointer',
-                              opacity: v.stock <= 0 ? 0.4 : 1,
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              minWidth: 50,
-                              position: 'relative'
-                            }}
-                          >
-                            <span style={{ fontSize: '0.95rem', fontWeight: isSelected ? 700 : 500 }}>{v.size || 'U'}</span>
-                            {v.color && <span style={{ fontSize: '0.7rem', marginTop: 2 }}>{v.color}</span>}
-                            {v.stock <= 0 && (
-                              <div style={{ position: 'absolute', width: '100%', height: '1px', background: 'var(--text-muted)', top: '50%', transform: 'rotate(-25deg)' }}></div>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
+
+                {/* Details Side */}
+                <div style={{ flex: '1 1 400px', padding: 40, display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ marginBottom: 25 }}>
+                    {selectedPDPProduct.brand && <h2 style={{ fontFamily: 'var(--font-title)', fontSize: '1.2rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>{selectedPDPProduct.brand}</h2>}
+                    <h1 style={{ fontFamily: 'var(--font-title)', fontSize: '2rem', fontWeight: 600, marginBottom: 15 }}>{selectedPDPProduct.name}</h1>
                     
                     {(() => {
-                      const selectedId = selectedPublicVariants[p.id];
-                      const selectedVariant = p.variants.find((v: any) => v.id === selectedId);
-                      
+                      const v = selectedPDPProduct.variants && selectedPDPProduct.variants.length > 0 ? selectedPDPProduct.variants[0] : null;
+                      if (!v) return null;
+                      const hasDiscount = v.original_price && v.original_price > v.selling_price;
+                      const discountPercent = hasDiscount ? Math.round(((v.original_price - v.selling_price) / v.original_price) * 100) : 0;
                       return (
-                        <div style={{ background: 'rgba(0,0,0,0.1)', padding: 15, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              {selectedVariant ? (
-                                <>
-                                  {selectedVariant.original_price && selectedVariant.original_price > selectedVariant.selling_price && (
-                                    <span style={{ fontSize: '0.75rem', textDecoration: 'line-through', color: 'var(--text-muted)' }}>{selectedVariant.original_price} kr</span>
-                                  )}
-                                  <strong style={{ color: selectedVariant.original_price && selectedVariant.original_price > selectedVariant.selling_price ? 'var(--color-success)' : '#38bdf8', fontSize: '1.2rem' }}>{selectedVariant.selling_price} kr</strong>
-                                </>
-                              ) : (
-                                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Välj en storlek ovan</span>
-                              )}
-                            </div>
-                            
-                            {selectedVariant && selectedVariant.stock > 0 && (
-                              <span style={{ 
-                                fontSize: '0.75rem', 
-                                fontWeight: 700, 
-                                color: selectedVariant.stock === 1 ? '#fbbf24' : '#8b5cf6',
-                                background: selectedVariant.stock === 1 ? 'rgba(245, 158, 11, 0.1)' : 'rgba(139, 92, 246, 0.1)',
-                                padding: '4px 10px',
-                                borderRadius: 20,
-                                border: selectedVariant.stock === 1 ? '1px solid rgba(245, 158, 11, 0.2)' : '1px solid rgba(139, 92, 246, 0.2)'
-                              }}>
-                                {selectedVariant.stock === 1 ? 'Endast 1 par kvar' : `${selectedVariant.stock} par i lager`}
-                              </span>
-                            )}
-                          </div>
-                          
-                          <button
-                            disabled={!selectedVariant || selectedVariant.stock <= 0}
-                            onClick={() => {
-                              if (selectedVariant) {
-                                addToPublicCart(p.name, p.category, selectedVariant);
-                                setSelectedPublicVariants({ ...selectedPublicVariants, [p.id]: 0 }); // unselect
-                              }
-                            }}
-                            className="btn btn-primary btn-full"
-                            style={{ fontWeight: 700, padding: 12, display: 'flex', justifyContent: 'center', gap: 8, alignItems: 'center' }}
-                          >
-                            <ShoppingCart style={{ width: 18, height: 18 }} />
-                            <span>Lägg i varukorg</span>
-                          </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
+                          <span style={{ fontSize: '1.5rem', fontWeight: 800, color: hasDiscount ? 'var(--color-danger)' : 'var(--text-primary)' }}>{v.selling_price} kr</span>
+                          {hasDiscount && (
+                            <>
+                              <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: '1.1rem' }}>{v.original_price} kr</span>
+                              <span style={{ background: 'var(--color-danger)', color: 'white', padding: '4px 8px', borderRadius: 4, fontSize: '0.8rem', fontWeight: 700 }}>-{discountPercent}%</span>
+                            </>
+                          )}
                         </div>
                       );
                     })()}
                   </div>
+
+                  <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 30, fontSize: '0.95rem' }}>{selectedPDPProduct.description}</p>
+
+                  <div style={{ marginBottom: 30 }}>
+                    <h4 style={{ fontSize: '0.9rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 15 }}>Välj storlek</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 10 }}>
+                      {selectedPDPProduct.variants.map((v: any) => {
+                        const isSelected = pdpSelectedVariantId === v.id;
+                        const isOutOfStock = v.stock <= 0;
+                        return (
+                          <button
+                            key={v.id}
+                            disabled={isOutOfStock}
+                            onClick={() => setPdpSelectedVariantId(v.id)}
+                            style={{
+                              padding: '12px 0',
+                              background: isSelected ? 'var(--text-primary)' : 'transparent',
+                              border: isSelected ? '1px solid var(--text-primary)' : '1px solid var(--border-light)',
+                              color: isSelected ? 'var(--bg-main)' : (isOutOfStock ? 'rgba(255,255,255,0.2)' : 'var(--text-primary)'),
+                              borderRadius: 4,
+                              cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+                              fontWeight: 600,
+                              fontSize: '1rem',
+                              position: 'relative',
+                              transition: 'all 0.2s',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <span>{v.size || 'UNI'}</span>
+                            {isOutOfStock && <div style={{ position: 'absolute', width: '100%', height: 1, background: 'rgba(255,255,255,0.2)', top: '50%', transform: 'rotate(-15deg)' }}></div>}
+                            {v.color && <span style={{ fontSize: '0.65rem', marginTop: 4, fontWeight: 400, opacity: 0.8 }}>{v.color}</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 'auto', display: 'flex', gap: 15 }}>
+                    <button
+                      disabled={!pdpSelectedVariantId}
+                      onClick={() => {
+                        const variant = selectedPDPProduct.variants.find((v:any) => v.id === pdpSelectedVariantId);
+                        if (variant) {
+                          addToPublicCart(selectedPDPProduct.name, selectedPDPProduct.category, variant);
+                          setPdpSelectedVariantId(null);
+                        }
+                      }}
+                      className="btn btn-primary"
+                      style={{ flex: 1, padding: '16px 0', fontSize: '1.1rem', fontWeight: 700, borderRadius: 4 }}
+                    >
+                      <ShoppingCart style={{ width: 18, height: 18, marginRight: 8 }} />
+                      Lägg till i varukorgen
+                    </button>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div id="public-catalog-grid" className="products-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px 15px' }}>
+              {filteredPublicProducts.map((p) => {
+                const firstVariant = p.variants && p.variants.length > 0 ? p.variants[0] : null;
+                const hasDiscount = firstVariant && firstVariant.original_price && firstVariant.original_price > firstVariant.selling_price;
+                const discountPercent = hasDiscount ? Math.round(((firstVariant.original_price - firstVariant.selling_price) / firstVariant.original_price) * 100) : 0;
+                const displayImage = firstVariant && firstVariant.image_url ? firstVariant.image_url : p.imageUrl;
+                const colors = Array.from(new Set(p.variants.map((v:any) => v.color).filter(Boolean)));
+                
+                return (
+                  <div 
+                    key={p.id} 
+                    className="product-card" 
+                    onClick={() => { setSelectedPDPProduct(p); setPdpSelectedVariantId(null); }}
+                    style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', position: 'relative' }}
+                  >
+                    <div style={{ position: 'relative', background: 'rgba(255,255,255,0.02)', paddingBottom: '130%', overflow: 'hidden', borderRadius: 4, marginBottom: 12 }}>
+                      {displayImage ? (
+                        <img src={displayImage} alt={p.name} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3rem', opacity: 0.1 }}>👟</div>
+                      )}
+                      
+                      {p.is_sponsored && (
+                        <span style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(255,255,255,0.9)', color: '#000', padding: '2px 6px', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', borderRadius: 2 }}>Sponsrad</span>
+                      )}
+                    </div>
 
-          {filteredPublicProducts.length === 0 && (
+                    <div style={{ padding: '0 4px' }}>
+                      {p.brand && <div style={{ fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>{p.brand}</div>}
+                      <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
+                      {colors.length > 0 && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 6 }}>Färger: {colors.join(', ')}</div>}
+                      
+                      {firstVariant && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                          <span style={{ fontWeight: 800, color: hasDiscount ? '#ef4444' : 'var(--text-primary)', fontSize: '1.1rem' }}>{firstVariant.selling_price} kr</span>
+                          {hasDiscount && (
+                            <>
+                              <span style={{ textDecoration: 'line-through', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{firstVariant.original_price} kr</span>
+                              <span style={{ background: '#ef4444', color: '#fff', padding: '2px 6px', fontSize: '0.75rem', fontWeight: 700, borderRadius: 4 }}>-{discountPercent}%</span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {!selectedPDPProduct && filteredPublicProducts.length === 0 && (
             <div className="empty-state">
               <PackageOpen style={{ width: 48, height: 48, color: 'var(--text-muted)', marginBottom: 15 }} />
               <h3>Inga matchande produkter i lager för tillfället</h3>
