@@ -365,19 +365,21 @@ const apiClient = {
     }
 
     if (path.includes('/api/users') && !path.includes('/profile')) {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-      });
-      if (authError) throw authError;
-
-      // also insert into public users table
+      // 1. Insert into public.users FIRST while we are still logged in as admin!
       const { data: res, error } = await supabase.from('users').insert({
         email: data.email,
         role: data.role,
         allowed_projects: data.allowed_projects || ''
       }).select().single();
       if (error) throw error;
+
+      // 2. Create the auth user (this will auto-login the new user, unfortunately)
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+      });
+      // We ignore authError here if it says "User already registered" just in case they existed
+      if (authError && !authError.message.includes('already registered')) throw authError;
       
       return { data: res };
     }
