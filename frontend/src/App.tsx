@@ -277,6 +277,9 @@ export default function App() {
         (payload: any) => {
           console.log('Realtime bookings update received:', payload);
           fetchBookings();
+          fetchProducts();
+          fetchPublicProducts();
+          fetchAnalytics();
         }
       )
       .on(
@@ -285,6 +288,7 @@ export default function App() {
         (payload: any) => {
           console.log('Realtime variants update received:', payload);
           fetchProducts();
+          fetchPublicProducts();
         }
       )
       .on(
@@ -293,6 +297,7 @@ export default function App() {
         (payload: any) => {
           console.log('Realtime products update received:', payload);
           fetchProducts();
+          fetchPublicProducts();
         }
       )
       .on(
