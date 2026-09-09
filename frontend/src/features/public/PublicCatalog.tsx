@@ -342,6 +342,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
         last_name: bookingLastName.trim(),
         phone: bookingPhone.trim(),
         discount_code: bookingDiscountValid ? bookingDiscountCode.trim() : undefined,
+        discount_percent: bookingDiscountValid ? bookingDiscountPercent : undefined,
         message: bookingMessage.trim() || undefined
       });
       if (res.data.success) {
@@ -381,6 +382,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
         last_name: checkoutLastName.trim(),
         phone: checkoutPhone.trim(),
         discount_code: cartDiscountValid ? cartDiscountCode.trim() : undefined,
+        discount_percent: cartDiscountValid ? cartDiscountPercent : undefined,
         message: checkoutMessage.trim() || undefined,
         delivery_method: isShipping ? 'shipping' : 'pickup',
         shipping_address: isShipping ? checkoutShippingAddress.trim() : undefined,
@@ -1542,6 +1544,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                                         lastName: checkoutLastName,
                                         phone: checkoutPhone,
                                         discountCode: cartDiscountCode,
+                                        discountPercent: cartDiscountPercent,
                                         message: checkoutMessage,
                                         deliveryMethod: checkoutDeliveryMethod,
                                         shippingAddress: checkoutShippingAddress,

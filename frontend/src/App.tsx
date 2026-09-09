@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from './apiClient';
-import supabase from './supabaseClient';
+import { supabase } from './supabaseClient';
 import {
   Home,
   ShoppingCart,
@@ -266,7 +266,7 @@ export default function App() {
           schema: 'public',
           table: 'bookings'
         },
-        (payload) => {
+        (payload: any) => {
           console.log('Realtime booking update received:', payload);
           fetchBookings();
         }

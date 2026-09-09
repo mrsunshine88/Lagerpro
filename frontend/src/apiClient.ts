@@ -104,9 +104,11 @@ const apiClient = {
 
     if (path.includes('/api/projects/config') || path.includes('/api/public/projects/config')) {
       const project = params.get('project');
-      const { data, error } = await supabase.from('settings').select('*').eq('project', project).maybeSingle();
-      if (error) return { data: {} };
-      return { data: data?.value || {} };
+      const { data, error } = await supabase.from('settings').select('*').eq('key', `project_config_${project}`).maybeSingle();
+      if (error || !data) return { data: {} };
+      let parsed = {};
+      try { parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value; } catch(e) {}
+      return { data: parsed };
     }
     
     if (path.includes('/api/projects/discount')) {
@@ -245,7 +247,8 @@ const apiClient = {
           quantity: 1,
           purchase_price: pPrice,
           selling_price: sPrice * (1.0 - (discount / 100.0)),
-          notes: 'Sale from admin confirmation'
+          notes: 'Sale from admin confirmation',
+          booking_id: id
         });
       }
       
@@ -302,9 +305,13 @@ const apiClient = {
           customer_email: data.email || `guest_${Date.now()}@lagerpro.se`,
           customer_phone: data.phone,
           message: data.message,
-          discount_code: data.discount_code,
-          payment_status: data.payment_status || 'pending',
-          status: 'pending'
+          discount_code: data.discount_code || data.discountCode,
+          discount_percent: data.discount_percent || data.discountPercent || 0,
+          payment_status: data.payment_status || data.paymentStatus || 'pending',
+          status: 'pending',
+          delivery_method: data.delivery_method || data.deliveryMethod,
+          shipping_address: data.shipping_address || data.shippingAddress,
+          shipping_cost: data.shipping_cost || data.shippingCost || 0
         }));
         const { data: res, error } = await supabase.rpc('checkout_cart', { payload: rpcPayload });
         if (error) throw error;
