@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { supabase } from '../../supabaseClient';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   LayoutGrid,

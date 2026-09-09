@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { supabase } from '../../supabaseClient';
 import { RefreshCw, Search, X, MessageSquare, ChevronRight, Phone, MapPin, Package, Tag, CreditCard } from 'lucide-react';
 import type { Booking, UserProfile } from '../../types';
 
