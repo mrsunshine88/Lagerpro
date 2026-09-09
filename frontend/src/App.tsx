@@ -40,7 +40,7 @@ import {
 import './App.css';
 
 // --- CONFIGURATION ---
-const API_BASE_URL = 'http://localhost:3000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 // --- MODULAR IMPORTS ---
 import type { Variant, Product, Booking, CartItem, UserProfile, ProjectSummary, AnalyticsData } from './types';
