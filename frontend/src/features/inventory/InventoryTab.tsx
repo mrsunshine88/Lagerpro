@@ -669,7 +669,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
                           </div>
                           <div>
                             <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Ord. pris (kr)</label>
-                            <input type="number" placeholder="Valfritt" value={v.original_price || ''} onChange={(e) => { const c = [...productVariants]; c[idx].original_price = e.target.value ? parseFloat(e.target.value) : undefined; setProductVariants(c); }} style={{ width: '100%', padding: '6px 10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
+                            <input type="number" placeholder="Valfritt" value={v.original_price || ''} onChange={(e) => { const c = [...productVariants]; const val = e.target.value ? parseFloat(e.target.value) : undefined; c[idx].original_price = val; if (val !== undefined) { const appliedDiscount = (productDiscountPercent !== '' && productDiscountPercent > 0) ? productDiscountPercent : activeDiscount; c[idx].selling_price = Math.round(val * (1 - appliedDiscount / 100)); } setProductVariants(c); }} style={{ width: '100%', padding: '6px 10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
                           </div>
                         </div>
 
