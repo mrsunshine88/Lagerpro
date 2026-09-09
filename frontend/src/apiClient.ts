@@ -121,8 +121,12 @@ const apiClient = {
     if (path.includes('/api/public/settings/') || path.includes('/api/settings/')) {
       const key = path.split('/').pop();
       const { data, error } = await supabase.from('settings').select('value').eq('key', key).maybeSingle();
-      if (error) return { data: {} };
-      return { data: data?.value || {} };
+      if (error || !data) return { data: {} };
+      let val = data.value;
+      try {
+        if (typeof val === 'string' && val.startsWith('{')) val = JSON.parse(val);
+      } catch (e) {}
+      return { data: val || {} };
     }
     
     if (path.includes('/api/projects/investment')) {
