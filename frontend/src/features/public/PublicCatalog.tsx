@@ -672,6 +672,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                             <span>{v.size || 'UNI'}</span>
                             {isOutOfStock && <div style={{ position: 'absolute', width: '100%', height: 1, background: 'rgba(255,255,255,0.2)', top: '50%', transform: 'rotate(-15deg)' }}></div>}
                             {v.color && <span style={{ fontSize: '0.65rem', marginTop: 4, fontWeight: 400, opacity: 0.8 }}>{v.color}</span>}
+                            {!isOutOfStock && <span style={{ fontSize: '0.65rem', marginTop: 2, fontWeight: 400, opacity: 0.7, color: v.stock === 1 ? 'var(--color-danger)' : 'inherit' }}>{v.stock === 1 ? 'Endast 1 kvar' : `${v.stock} st i lager`}</span>}
                           </button>
                         );
                       })}
@@ -679,21 +680,34 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                   </div>
 
                   {/* QUANTITY SELECTOR */}
-                  {pdpSelectedVariantId && (
-                    <div style={{ marginTop: 20, marginBottom: 20 }}>
-                      <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: 8 }}>Välj antal (i lager: {selectedPDPProduct.variants.find((v:any) => v.id === pdpSelectedVariantId)?.stock} st)</label>
-                      <select 
-                        className="custom-select" 
-                        value={pdpSelectedQuantity} 
-                        onChange={(e) => setPdpSelectedQuantity(Number(e.target.value))}
-                        style={{ width: '100%', padding: '12px 15px', fontSize: '1rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)' }}
-                      >
-                        {Array.from({ length: Math.min(10, selectedPDPProduct.variants.find((v:any) => v.id === pdpSelectedVariantId)?.stock || 1) }).map((_, i) => (
-                          <option key={i+1} value={i+1}>{i+1} st</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  {pdpSelectedVariantId && (() => {
+                    const selectedVariant = selectedPDPProduct.variants.find((v:any) => v.id === pdpSelectedVariantId);
+                    if (!selectedVariant) return null;
+                    
+                    if (selectedVariant.stock <= 1) {
+                      return (
+                        <div style={{ marginTop: 20, marginBottom: 20, padding: '12px 15px', background: 'rgba(255,255,255,0.05)', borderRadius: 4, border: '1px solid var(--border-light)' }}>
+                          <span style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>1 st vald (Endast 1 st kvar i lager)</span>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div style={{ marginTop: 20, marginBottom: 20 }}>
+                        <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: 8 }}>Välj antal (i lager: {selectedVariant.stock} st)</label>
+                        <select 
+                          className="custom-select" 
+                          value={pdpSelectedQuantity} 
+                          onChange={(e) => setPdpSelectedQuantity(Number(e.target.value))}
+                          style={{ width: '100%', padding: '12px 15px', fontSize: '1rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)' }}
+                        >
+                          {Array.from({ length: Math.min(10, selectedVariant.stock) }).map((_, i) => (
+                            <option key={i+1} value={i+1}>{i+1} st</option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })()}
 
                   <div style={{ display: 'flex', gap: 15, marginTop: pdpSelectedVariantId ? 0 : 30 }}>
                     <button
