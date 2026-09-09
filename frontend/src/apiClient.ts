@@ -231,7 +231,7 @@ const apiClient = {
     if (path.includes('/api/bookings/batch')) {
       if (data.items) {
         const rpcPayload = data.items.map((item: any) => ({
-          variant_id: item.variant_id,
+          variant_id: item.variant_id || item.variantId,
           customer_first_name: data.first_name,
           customer_last_name: data.last_name,
           customer_phone: data.phone,
