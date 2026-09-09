@@ -8,4 +8,9 @@ export default defineConfig({
   clientUrl: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/lager',
   metadataProvider: TsMorphMetadataProvider,
   debug: true,
+  driverOptions: {
+    connection: process.env.DATABASE_URL?.includes('supabase.co') ? {
+      ssl: { rejectUnauthorized: false },
+    } : undefined,
+  },
 });
