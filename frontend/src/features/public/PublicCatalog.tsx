@@ -584,7 +584,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap' }}>
                 {/* Image Gallery Side */}
-                <div style={{ flex: '1 1 500px', minWidth: 300, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                <div className="pdp-image-container" style={{ flex: '1 1 500px', minWidth: 300, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
                   {selectedPDPProduct.variants && selectedPDPProduct.variants.find((v:any) => v.id === pdpSelectedVariantId)?.image_url ? (
                     <img src={selectedPDPProduct.variants.find((v:any) => v.id === pdpSelectedVariantId)?.image_url} alt={selectedPDPProduct.name} style={{ width: '100%', height: '100%', maxHeight: '600px', objectFit: 'contain' }} />
                   ) : selectedPDPProduct.imageUrl ? (
@@ -598,7 +598,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                 </div>
 
                 {/* Details Side */}
-                <div style={{ flex: '1 1 400px', padding: 40, display: 'flex', flexDirection: 'column' }}>
+                <div className="pdp-details-container" style={{ flex: '1 1 400px', padding: 40, display: 'flex', flexDirection: 'column' }}>
                   <div style={{ marginBottom: 25 }}>
                     {selectedPDPProduct.brand && <h2 style={{ fontFamily: 'var(--font-title)', fontSize: '1.2rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 }}>{selectedPDPProduct.brand}</h2>}
                     <h1 style={{ fontFamily: 'var(--font-title)', fontSize: '2rem', fontWeight: 600, marginBottom: 15 }}>{selectedPDPProduct.name}</h1>

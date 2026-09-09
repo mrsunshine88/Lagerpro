@@ -3812,3 +3812,16 @@ body {
         padding-bottom: 50px !important;
     }
 }
+
+/* Mobile Polish */
+@media (max-width: 768px) {
+    .shoe-photo-box { height: 160px !important; padding: 25px !important; }
+    .shoe-photo-box img { max-height: 100% !important; object-fit: contain !important; transform: none !important; }
+    .pdp-details-container { padding: 30px 20px !important; }
+    .pdp-image-container { max-height: 40vh; padding: 20px; box-sizing: border-box; }
+    .pdp-image-container img { max-height: 100% !important; width: auto !important; margin: 0 auto; object-fit: contain !important; }
+    .content-wrapper { width: 100% !important; padding: 0 15px !important; box-sizing: border-box !important; }
+    .product-card-body { padding: 15px !important; }
+    #public-catalog-grid .product-card:hover .shoe-photo-box img { transform: none !important; }
+}
+
