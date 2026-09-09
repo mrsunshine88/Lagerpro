@@ -77,9 +77,14 @@ const apiClient = {
     }
     
     if (path.includes('/api/projects') && !path.includes('/config') && !path.includes('/discount') && !path.includes('/investment')) {
-      const { data, error } = await supabase.from('products').select('category');
-      if (error) throw error;
-      const unique = Array.from(new Set(data.map((d: any) => d.category).filter(Boolean)));
+      const { data: prodData } = await supabase.from('products').select('category');
+      const prodCategories = (prodData || []).map((d: any) => d.category).filter(Boolean);
+      
+      const { data: setData } = await supabase.from('settings').select('value').eq('key', 'projects_list').maybeSingle();
+      let savedProjects: string[] = [];
+      try { savedProjects = JSON.parse(setData?.value || '[]'); } catch(e) {}
+      
+      const unique = Array.from(new Set([...prodCategories, ...savedProjects]));
       return { data: unique.map(u => ({ name: u })) };
     }
 
@@ -261,6 +266,21 @@ const apiClient = {
       return { data: { success: false, error: 'No image found' } };
     }
 
+    if (path.includes('/api/projects') && !path.includes('/config') && !path.includes('/discount') && !path.includes('/investment')) {
+      const projectName = data?.name;
+      if (!projectName) return { data: null };
+      
+      const { data: current } = await supabase.from('settings').select('value').eq('key', 'projects_list').maybeSingle();
+      let list: string[] = [];
+      try { list = JSON.parse(current?.value || '[]'); } catch(e) {}
+      
+      if (!list.includes(projectName)) {
+        list.push(projectName);
+        await supabase.from('settings').upsert({ key: 'projects_list', value: JSON.stringify(list) }, { onConflict: 'key' });
+      }
+      return { data: { success: true } };
+    }
+
     if (path.includes('/api/projects/investment')) {
       const { error } = await supabase.from('settings').upsert({ key: `project_investment_${data.project}`, value: data.investment, project: data.project }, { onConflict: 'key' });
       if (error) throw error;
@@ -345,6 +365,18 @@ const apiClient = {
       const id = parseInt(path.split('/').pop()!);
       const { error } = await supabase.from('transactions').delete().eq('id', id);
       if (error) throw error;
+      return { data: { success: true } };
+    }
+
+    if (path.includes('/api/projects') && !path.includes('/config') && !path.includes('/discount') && !path.includes('/investment')) {
+      const projectName = config?.data?.name || data?.name;
+      if (projectName) {
+        const { data: current } = await supabase.from('settings').select('value').eq('key', 'projects_list').maybeSingle();
+        let list: string[] = [];
+        try { list = JSON.parse(current?.value || '[]'); } catch(e) {}
+        list = list.filter(n => n !== projectName);
+        await supabase.from('settings').upsert({ key: 'projects_list', value: JSON.stringify(list) }, { onConflict: 'key' });
+      }
       return { data: { success: true } };
     }
 
