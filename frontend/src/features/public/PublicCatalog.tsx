@@ -543,7 +543,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
               <input type="text" value={publicSearch} onChange={(e) => setPublicSearch(e.target.value)} placeholder="Sök efter produkt, färg, storlek eller kategori..." style={{ width: '100%', padding: '10px 12px 10px 40px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }} />
             </div>
             
-            <div className="filter-box" style={{ flex: 1, minWidth: 150 }}>
+            <div className="filter-box" style={{ flex: 1, minWidth: 130 }}>
               <select value={publicCategory} onChange={(e) => setPublicCategory(e.target.value)} className="custom-select" style={{ width: '100%', height: 42 }}>
                 <option value="all">Alla kategorier</option>
                 {publicCategoriesList.map((c) => (
@@ -552,7 +552,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
               </select>
             </div>
             
-            <div className="filter-box" style={{ flex: 1, minWidth: 150 }}>
+            <div className="filter-box" style={{ flex: 1, minWidth: 130 }}>
               <select value={publicSize} onChange={(e) => setPublicSize(e.target.value)} className="custom-select" style={{ width: '100%', height: 42 }}>
                 <option value="all">Alla storlekar</option>
                 {publicSizesList.map((s) => (
@@ -562,7 +562,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
             </div>
 
 
-            <div className="filter-box" style={{ flex: 1, minWidth: 150, position: 'relative' }}>
+            <div className="filter-box" style={{ flex: 1, minWidth: 130, position: 'relative' }}>
               <Tag style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', width: 14, height: 14, pointerEvents: 'none' }} />
               <input type="number" value={publicMaxPrice} onChange={(e) => setPublicMaxPrice(e.target.value)} placeholder="Max pris (kr)" min="0" step="50" style={{ width: '100%', height: 42, padding: '10px 12px 10px 36px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', boxSizing: 'border-box' }} />
             </div>
@@ -570,18 +570,25 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
         </section>
 
         <section className="products-section">
-          {selectedPDPProduct ? (
-            <div className="pdp-container pdp-mobile-fullscreen glass-card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'fadeIn 0.3s ease-out', border: '1px solid var(--border-light)' }}>
-              <div style={{ padding: '20px 30px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center' }}>
-                <button 
-                  onClick={() => { setSelectedPDPProduct(null); setPdpSelectedVariantId(null); }} 
-                  className="btn btn-ghost" 
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px' }}
-                >
-                  <ArrowLeft style={{ width: 18, height: 18 }} />
-                  <span>Tillbaka till katalogen</span>
-                </button>
-              </div>
+        {selectedPDPProduct ? (
+          <div className="pdp-container pdp-mobile-fullscreen animate-fade-in glass-card" style={{ maxWidth: 1000, margin: '0 auto', background: 'var(--bg-main)', border: 'none' }}>
+            <div style={{ padding: '20px 25px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <button onClick={() => { setSelectedPDPProduct(null); setPdpSelectedVariantId(null); }} className="btn btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+                <ArrowLeft style={{ width: 18, height: 18 }} /> Tillbaka till katalogen
+              </button>
+              {publicCart.length > 0 && (
+                <div style={{ position: 'relative', display: 'inline-flex' }}>
+                  <button onClick={() => setCartModalOpen(true)} className="btn btn-primary" id="pdp-cart-btn" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6, background: 'var(--color-accent)', borderColor: 'var(--color-accent)', padding: '8px 14px' }}>
+                    <ShoppingCart style={{ width: 16, height: 16 }} />
+                    <span className="desktop-only">Visa varukorg</span>
+                  </button>
+                  <span style={{ position: 'absolute', top: -5, right: -5, background: '#ef4444', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                    {publicCart.reduce((sum, item) => sum + item.cart_qty, 0)}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="pdp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', minHeight: 500 }}>
               <div style={{ display: 'flex', flexWrap: 'wrap' }}>
                 {/* Image Gallery Side */}
                 <div className="pdp-image-container" style={{ flex: '1 1 500px', minWidth: 300, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
@@ -666,7 +673,12 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                       onClick={() => {
                         const variant = selectedPDPProduct.variants.find((v:any) => v.id === pdpSelectedVariantId);
                         if (variant) {
-                          addToPublicCart(selectedPDPProduct.name, selectedPDPProduct.category, variant);
+                          setPublicCart(prev => {
+                            const existing = prev.find(p => p.variant.id === variant.id);
+                            if (existing) return prev.map(p => p.variant.id === variant.id ? { ...p, cart_qty: p.cart_qty + 1 } : p);
+                            return [...prev, { variant, product: selectedPDPProduct, cart_qty: 1 }];
+                          });
+                          setCartModalOpen(true);
                           setPdpSelectedVariantId(null);
                         }
                       }}
