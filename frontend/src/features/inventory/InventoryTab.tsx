@@ -58,7 +58,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [productName, setProductName] = useState('');
-  const [productCategory, setProductCategory] = useState('Skor');
+  const [productCategory, setProductCategory] = useState('');
   const [productDescription, setProductDescription] = useState('');
   const [productVariantLabel1, setProductVariantLabel1] = useState('Storlek');
   const [productVariantLabel2, setProductVariantLabel2] = useState('Färg');
@@ -402,7 +402,7 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
 
             {userProfile?.role === 'admin' && (
               <>
-                <button onClick={() => { setEditingProduct(null); setProductName(''); setProductCategory('Skor'); setProductDescription(''); setProductVariants([]); setProductModalOpen(true); }} className="btn btn-primary" style={{ height: 42 }}>
+                <button onClick={() => { setEditingProduct(null); setProductName(''); setProductCategory(projectsList[0] || ''); setProductDescription(''); setProductVariants([]); setProductModalOpen(true); }} className="btn btn-primary" style={{ height: 42 }}>
                   <Plus style={{ width: 16, height: 16, marginRight: 4 }} />
                   <span>Lägg till produkt</span>
                 </button>
