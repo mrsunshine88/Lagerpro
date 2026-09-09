@@ -12,6 +12,7 @@
     "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
+    "@paypal/react-paypal-js": "^10.4.0",
     "axios": "^1.16.1",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^1.16.0",

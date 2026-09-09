@@ -103,6 +103,8 @@ export class BookingsController {
       purchase_price: b.variant.purchasePrice,
       product_name: b.variant.product.name,
       product_category: b.variant.product.category,
+      tracking_number: b.trackingNumber,
+      shipping_label_url: b.shippingLabelUrl,
     }));
   }
 

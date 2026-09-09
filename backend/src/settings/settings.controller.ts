@@ -204,4 +204,47 @@ export class SettingsController {
     });
     return { success: true, message: 'Swish-inställningarna har sparats.' };
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Get('settings/shipping')
+  async getShippingConfig() {
+    return this.settingsService.getShippingConfig();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('settings/shipping')
+  @HttpCode(HttpStatus.OK)
+  async setShippingConfig(
+    @Body() body: { provider: string; postnord_key: string; dhl_key: string; dhl_account: string }
+  ) {
+    await this.settingsService.setShippingConfig(body);
+    return { success: true, message: 'Fraktinställningar sparade.' };
+  }
+
+  @Get('public/settings/storefront')
+  async getPublicStorefrontConfig() {
+    return this.settingsService.getStorefrontConfig();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Get('settings/storefront')
+  async getStorefrontConfig() {
+    return this.settingsService.getStorefrontConfig();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @Post('settings/storefront')
+  @HttpCode(HttpStatus.OK)
+  async setStorefrontConfig(
+    @Body() body: { company_name: string; banner_url: string }
+  ) {
+    await this.settingsService.setStorefrontConfig(body);
+    return { success: true, message: 'Butiksdesign sparad.' };
+  }
 }
+
+

@@ -378,4 +378,62 @@ export class SettingsService {
 
     return { valid: true, discountPercent: dc.discountPercent, project: dc.project, freeShipping: dc.freeShipping };
   }
+
+  async getShippingConfig(): Promise<{ provider: string; postnord_key: string; dhl_key: string; dhl_account: string }> {
+    const provider = await this.settingRepository.findOne({ key: 'shipping_provider' });
+    const postnord = await this.settingRepository.findOne({ key: 'postnord_api_key' });
+    const dhlKey = await this.settingRepository.findOne({ key: 'dhl_api_key' });
+    const dhlAcc = await this.settingRepository.findOne({ key: 'dhl_account_number' });
+
+    return {
+      provider: provider?.value || 'postnord',
+      postnord_key: postnord?.value || '',
+      dhl_key: dhlKey?.value || '',
+      dhl_account: dhlAcc?.value || '',
+    };
+  }
+
+  async setShippingConfig(config: { provider: string; postnord_key: string; dhl_key: string; dhl_account: string }): Promise<void> {
+    await this.em.transactional(async (em) => {
+      let provSetting = await em.findOne(Setting, { key: 'shipping_provider' });
+      if (!provSetting) { provSetting = new Setting(); provSetting.key = 'shipping_provider'; em.persist(provSetting); }
+      provSetting.value = config.provider.trim();
+
+      let pnSetting = await em.findOne(Setting, { key: 'postnord_api_key' });
+      if (!pnSetting) { pnSetting = new Setting(); pnSetting.key = 'postnord_api_key'; em.persist(pnSetting); }
+      pnSetting.value = config.postnord_key.trim();
+
+      let dhlKSetting = await em.findOne(Setting, { key: 'dhl_api_key' });
+      if (!dhlKSetting) { dhlKSetting = new Setting(); dhlKSetting.key = 'dhl_api_key'; em.persist(dhlKSetting); }
+      dhlKSetting.value = config.dhl_key.trim();
+
+      let dhlASetting = await em.findOne(Setting, { key: 'dhl_account_number' });
+      if (!dhlASetting) { dhlASetting = new Setting(); dhlASetting.key = 'dhl_account_number'; em.persist(dhlASetting); }
+      dhlASetting.value = config.dhl_account.trim();
+    });
+  }
+
+  async getStorefrontConfig(): Promise<{ company_name: string; banner_url: string }> {
+    const comp = await this.settingRepository.findOne({ key: 'storefront_company_name' });
+    const banner = await this.settingRepository.findOne({ key: 'storefront_banner_url' });
+
+    return {
+      company_name: comp?.value || 'Företaget AB',
+      banner_url: banner?.value || '',
+    };
+  }
+
+  async setStorefrontConfig(config: { company_name: string; banner_url: string }): Promise<void> {
+    await this.em.transactional(async (em) => {
+      let compSetting = await em.findOne(Setting, { key: 'storefront_company_name' });
+      if (!compSetting) { compSetting = new Setting(); compSetting.key = 'storefront_company_name'; em.persist(compSetting); }
+      compSetting.value = config.company_name.trim();
+
+      let bannerSetting = await em.findOne(Setting, { key: 'storefront_banner_url' });
+      if (!bannerSetting) { bannerSetting = new Setting(); bannerSetting.key = 'storefront_banner_url'; em.persist(bannerSetting); }
+      bannerSetting.value = config.banner_url.trim();
+    });
+  }
 }
+
+

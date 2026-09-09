@@ -55,7 +55,19 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({
     }
   };
 
+
+  const handleGenerateLabel = async (id: number) => {
+    try {
+      const res = await axios.post(`${apiBaseUrl}/api/admin/shipping/${id}/label`, {}, getAxiosConfig());
+      alert(`Fraktsedel genererad! Spårningsnummer: ${res.data.trackingNumber}`);
+      fetchBookings();
+    } catch (e) {
+      alert('Kunde inte generera fraktsedel');
+    }
+  };
+
   const filteredBookings = bookings.filter((b) => {
+
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
@@ -254,7 +266,18 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({
                   </div>
                   {selectedBooking.delivery_method === 'shipping' && selectedBooking.shipping_address && (
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginLeft: 34, lineHeight: 1.5, background: 'rgba(255,255,255,0.03)', padding: 8, borderRadius: 6 }}>
-                      {selectedBooking.shipping_address}
+                      <div style={{ marginBottom: 6 }}>{selectedBooking.shipping_address}</div>
+                      {selectedBooking.tracking_number && (
+                        <div style={{ padding: '6px 8px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#60a5fa', textTransform: 'uppercase' }}>Spårningsnummer</span>
+                          <span style={{ fontFamily: 'monospace', color: 'white' }}>{selectedBooking.tracking_number}</span>
+                          {selectedBooking.shipping_label_url && (
+                            <a href={selectedBooking.shipping_label_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem', color: '#60a5fa', textDecoration: 'underline', marginTop: 2 }}>
+                              Ladda ner Fraktsedel (PDF)
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -307,6 +330,11 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
                   {selectedBooking.status === 'pending' && (
                     <>
+                      {selectedBooking.delivery_method === 'shipping' && !selectedBooking.tracking_number && (
+                        <button onClick={() => { handleGenerateLabel(selectedBooking.id); }} className="btn btn-primary" style={{ width: 160 }}>
+                          Skapa Fraktsedel
+                        </button>
+                      )}
                       <button onClick={() => { handleConfirmBooking(selectedBooking.id); setSelectedBooking({ ...selectedBooking, status: 'confirmed' }); }} className="btn btn-success" style={{ width: 160 }}>
                         {selectedBooking.payment_status === 'paid' ? 'Bekräfta överlämning' : 'Bekräfta hämtning'}
                       </button>

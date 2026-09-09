@@ -1,11 +1,15 @@
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module.js';
 import { MikroORM } from '@mikro-orm/core';
 import { User } from './entities/user.entity.js';
 import * as bcrypt from 'bcrypt';
+import { join } from 'path';
+
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  app.useStaticAssets(join(__dirname, '..', '..', 'uploads'), { prefix: '/uploads/' });
   app.enableCors();
 
   // Automatiskt skapa/uppdatera databasschema på startup (enormt smidigt vid driftsättning!)

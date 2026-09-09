@@ -11,9 +11,18 @@ export class PaypalController {
   constructor(private readonly paypalService: PaypalService) {}
 
   /**
+   * Public endpoint to get PayPal Client ID for the frontend checkout.
+   */
+  @Get('public/paypal/client-id')
+  async getPublicClientId() {
+    const config = await this.paypalService.getPaypalConfig();
+    return { client_id: config.client_id, mode: config.mode };
+  }
+
+  /**
    * Public endpoint for receiving PayPal Webhook payment notifications.
    */
-  @Post('webhooks/paypal')
+  @Post('public/webhooks/paypal')
   @HttpCode(HttpStatus.OK)
   async handleWebhook(
     @Body() body: any,

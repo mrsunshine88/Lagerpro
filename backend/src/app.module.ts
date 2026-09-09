@@ -13,6 +13,7 @@ import { SettingsModule } from './settings/settings.module.js';
 import { AnalyticsModule } from './analytics/analytics.module.js';
 import { UtilitiesModule } from './utilities/utilities.module.js';
 import { PaypalModule } from './paypal/paypal.module.js';
+import { ShippingModule } from './shipping/shipping.module.js';
 
 @Module({
   imports: [
@@ -29,9 +30,9 @@ import { PaypalModule } from './paypal/paypal.module.js';
     AnalyticsModule,
     UtilitiesModule,
     PaypalModule,
+    ShippingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}
-

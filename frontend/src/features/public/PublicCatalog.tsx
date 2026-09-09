@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import {
   PackageSearch,
   ShoppingCart,
@@ -82,6 +83,27 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
   const [checkoutModeSelected, setCheckoutModeSelected] = useState<'booking' | 'ecommerce'>('ecommerce');
 
   // --- LOCAL CART CONFIG: fetched fresh from server per project (never cached) ---
+  
+
+  // --- STOREFRONT state ---
+  const [storefront, setStorefront] = useState<{ company_name: string; banner_url: string }>({ company_name: 'Företaget AB', banner_url: '' });
+
+  useEffect(() => {
+    axios.get(`${apiBaseUrl}/api/public/settings/storefront`)
+      .then(res => setStorefront(res.data))
+      .catch(err => console.error(err));
+  }, [apiBaseUrl]);
+
+  // --- PAYPAL states ---
+  const [paypalClientId, setPaypalClientId] = useState('');
+  const [paymentMethodSelected, setPaymentMethodSelected] = useState<'swish' | 'paypal'>('swish');
+
+  useEffect(() => {
+    axios.get(`${apiBaseUrl}/api/public/paypal/client-id`)
+      .then(res => setPaypalClientId(res.data.client_id))
+      .catch(err => console.error(err));
+  }, [apiBaseUrl]);
+
   const [cartConfig, setCartConfig] = useState<{ checkout_mode: string; delivery_method: string; shipping_cost: number } | null>(null);
 
   // When the cart's project changes, fetch the latest config from server
@@ -458,7 +480,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
         <div className="header-left">
           <div className="logo">
             <PackageSearch className="logo-icon animate-float" />
-            <h1>LAGER<span>PRO</span></h1>
+            <h1>{storefront.company_name}</h1>
           </div>
           <span className="badge" style={{ background: 'rgba(217, 70, 239, 0.15)', color: 'var(--color-accent)', border: '1px solid rgba(217, 70, 239, 0.3)', fontWeight: 700, marginLeft: 10, fontSize: '0.75rem', letterSpacing: 0.5 }}>KUNDPORTAL</span>
         </div>
@@ -499,13 +521,19 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
       </header>
 
       <main className="content-wrapper">
-        <div className="welcome-banner glass-card" style={{ padding: 40, textAlign: 'center', marginBottom: 30, background: 'linear-gradient(135deg, rgba(217,70,239,0.05) 0%, rgba(139,92,246,0.05) 100%)', border: '1px solid var(--border-light)' }}>
-          <Sparkles style={{ width: 48, height: 48, color: 'var(--color-accent)', marginBottom: 15 }} className="animate-float" />
-          <h2 style={{ fontSize: '2rem', margin: '0 0 10px 0', fontWeight: 800, letterSpacing: -0.5 }}>Butikens Kundportal</h2>
-          <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', margin: '0 auto', maxWidth: 650, lineHeight: 1.6 }}>
-            Hitta dina favoritprodukter, välj din storlek och beställ enkelt direkt online! Beroende på projektets inställningar kan du välja att betala direkt med Swish och få det fraktat hem, eller boka för upphämtning i butik. Ingen registrering eller konto krävs.
-          </p>
-        </div>
+        {storefront.banner_url ? (
+          <div className="welcome-banner" style={{ width: '100%', marginBottom: 30, overflow: 'hidden', borderRadius: 12 }}>
+            <img src={storefront.banner_url} alt={storefront.company_name} style={{ width: '100%', height: 'auto', display: 'block' }} />
+          </div>
+        ) : (
+          <div className="welcome-banner glass-card" style={{ padding: 40, textAlign: 'center', marginBottom: 30, background: 'linear-gradient(135deg, rgba(217,70,239,0.05) 0%, rgba(139,92,246,0.05) 100%)', border: '1px solid var(--border-light)' }}>
+            <Sparkles style={{ width: 48, height: 48, color: 'var(--color-accent)', marginBottom: 15 }} className="animate-float" />
+            <h2 style={{ fontSize: '2rem', margin: '0 0 10px 0', fontWeight: 800, letterSpacing: -0.5 }}>{storefront.company_name} Kundportal</h2>
+            <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', margin: '0 auto', maxWidth: 650, lineHeight: 1.6 }}>
+              Välkommen! Hitta dina favoritprodukter, välj din storlek och beställ enkelt direkt online. Beroende på inställningar kan du få det fraktat hem eller boka för upphämtning.
+            </p>
+          </div>
+        )}
 
         <section className="controls-panel glass-card" style={{ marginBottom: 30, padding: 20 }}>
           <div className="search-filter-row" style={{ display: 'flex', gap: 15, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1335,12 +1363,27 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
 
                         {/* 2. Betalsätt Selector */}
                         {checkoutDeliveryMethod === 'shipping' ? (
-                          /* Shipping requires direct payment online */
-                          <div style={{ marginBottom: 15, padding: '10px 12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-light)', borderRadius: 6 }}>
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Betalsätt</span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600, fontSize: '0.9rem', color: 'var(--color-success)' }}>
-                              <CreditCard style={{ width: 16, height: 16, color: 'var(--color-success)' }} />
-                              <span>Direktbetalning online via Swish (Krävs vid frakt)</span>
+                          <div style={{ marginBottom: 15 }}>
+                            <label style={{ display: 'block', marginBottom: 8, fontSize: '0.85rem', fontWeight: 600 }}>Betalsätt online *</label>
+                            <div className="settings-grid-2col" style={{ gap: 10 }}>
+                              <button
+                                type="button"
+                                onClick={() => setPaymentMethodSelected('swish')}
+                                className={`btn btn-sm ${paymentMethodSelected === 'swish' ? 'btn-primary' : 'btn-secondary'}`}
+                                style={{ padding: 10, fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                              >
+                                <CreditCard style={{ width: 16, height: 16 }} />
+                                <span>Swish</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPaymentMethodSelected('paypal')}
+                                className={`btn btn-sm ${paymentMethodSelected === 'paypal' ? 'btn-primary' : 'btn-secondary'}`}
+                                style={{ padding: 10, fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                              >
+                                <CreditCard style={{ width: 16, height: 16 }} />
+                                <span>PayPal / Kort</span>
+                              </button>
                             </div>
                           </div>
                         ) : config.checkout_mode === 'both' ? (
@@ -1364,7 +1407,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                                 style={{ padding: 10, fontSize: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                               >
                                 <CreditCard style={{ width: 16, height: 16 }} />
-                                <span>Betala online (Swish)</span>
+                                <span>Kortbetalning / Swish (Online)</span>
                               </button>
                             </div>
                           </div>
@@ -1443,19 +1486,67 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                         </div>
 
                         {/* Submit Button */}
-                        <button type="submit" className="btn btn-success btn-full" style={{ padding: '12px', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                          {isEcom ? (
-                            <>
-                              <ShoppingCart style={{ width: 18, height: 18 }} />
-                              <span>Betala {finalTotal} kr med Swish</span>
-                            </>
-                          ) : (
-                            <>
-                              <CalendarCheck style={{ width: 18, height: 18 }} />
-                              <span>Bekräfta bokning ({finalTotal} kr)</span>
-                            </>
-                          )}
-                        </button>
+                        {isEcom && paymentMethodSelected === 'paypal' ? (
+                          <div style={{ marginTop: 15 }}>
+                            {paypalClientId ? (
+                              <PayPalScriptProvider options={{ clientId: paypalClientId, currency: 'SEK' }}>
+                                <PayPalButtons
+                                  style={{ layout: 'vertical' }}
+                                  createOrder={(data, actions) => {
+                                    return actions.order.create({
+                                      intent: 'CAPTURE',
+                                      purchase_units: [{
+                                        amount: {
+                                          currency_code: 'SEK',
+                                          value: finalTotal.toString()
+                                        }
+                                      }]
+                                    });
+                                  }}
+                                  onApprove={async (data, actions) => {
+                                    const details = await actions.order?.capture();
+                                    // Trigger backend save
+                                    try {
+                                      await axios.post(`${apiBaseUrl}/api/public/bookings/batch`, {
+                                        items: publicCart.map(item => ({ variantId: item.variant_id, qty: item.cart_qty })),
+                                        firstName: checkoutFirstName,
+                                        lastName: checkoutLastName,
+                                        phone: checkoutPhone,
+                                        discountCode: cartDiscountCode,
+                                        message: checkoutMessage,
+                                        deliveryMethod: checkoutDeliveryMethod,
+                                        shippingAddress: checkoutShippingAddress,
+                                        shippingCost: config.shipping_cost,
+                                        paymentStatus: 'paid_paypal'
+                                      });
+                                      setPublicCart([]);
+                                      fetchPublicProducts();
+                                      setPaymentStep('booking_success');
+                                    } catch (err) {
+                                      alert('Kunde inte spara bokningen i systemet efter betalning.');
+                                    }
+                                  }}
+                                />
+                              </PayPalScriptProvider>
+                            ) : (
+                              <div>Laddar PayPal...</div>
+                            )}
+                          </div>
+                        ) : (
+                          <button type="submit" className="btn btn-success btn-full" style={{ padding: '12px', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                            {isEcom ? (
+                              <>
+                                <ShoppingCart style={{ width: 18, height: 18 }} />
+                                <span>Betala {finalTotal} kr med Swish</span>
+                              </>
+                            ) : (
+                              <>
+                                <CalendarCheck style={{ width: 18, height: 18 }} />
+                                <span>Bekräfta bokning ({finalTotal} kr)</span>
+                              </>
+                            )}
+                          </button>
+                        )}
                       </form>
                     );
                   })()}

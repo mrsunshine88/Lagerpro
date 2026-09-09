@@ -44,6 +44,8 @@ export interface Booking {
   delivery_method?: string;
   shipping_address?: string;
   shipping_cost?: number;
+  tracking_number?: string;
+  shipping_label_url?: string;
 }
 
 export interface CartItem {

@@ -96,7 +96,7 @@ export default function App() {
 
   // --- NAVIGATION TAB ---
   const [activeTab, setActiveTab] = useState<'hub' | 'pos' | 'inventory' | 'bookings' | 'analytics' | 'admin'>('hub');
-  const [adminActiveTab, setAdminActiveTab] = useState<'users' | 'projects' | 'discount_codes' | 'swish' | 'paypal' | 'simulation'>('users');
+  const [adminActiveTab, setAdminActiveTab] = useState<'users' | 'projects' | 'storefront' | 'discount_codes' | 'shipping' | 'swish' | 'paypal' | 'simulation'>('users');
   const [confirmState, setConfirmState] = useState<{ message: string; resolve: (val: boolean) => void } | null>(null);
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' | 'info' }[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -163,6 +163,20 @@ export default function App() {
   const [newDiscountValidUntil, setNewDiscountValidUntil] = useState('');
   const [editingDiscountId, setEditingDiscountId] = useState<number | null>(null);
 
+
+
+  // Storefront settings
+  const [storefrontCompany, setStorefrontCompany] = useState('Företaget AB');
+  const [storefrontBanner, setStorefrontBanner] = useState('');
+  const [storefrontBannerFile, setStorefrontBannerFile] = useState<File | null>(null);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+
+  // Shipping settings
+  const [shippingProvider, setShippingProvider] = useState('postnord');
+  const [shippingPostnordKey, setShippingPostnordKey] = useState('');
+  const [shippingDhlKey, setShippingDhlKey] = useState('');
+  const [shippingDhlAccount, setShippingDhlAccount] = useState('');
+
   // Swish Global settings
   const [swishMerchantId, setSwishMerchantId] = useState('');
   const [swishCert, setSwishCert] = useState('');
@@ -187,7 +201,7 @@ export default function App() {
   const [isSimulatingPurchase, setIsSimulatingPurchase] = useState(false);
   const [isResettingSimulations, setIsResettingSimulations] = useState(false);
 
-  const [settingsActiveTab, setSettingsActiveTab] = useState<'profile' | 'projects' | 'discount_codes' | 'swish' | 'paypal' | 'simulation'>('profile');
+  const [settingsActiveTab, setSettingsActiveTab] = useState<'profile' | 'projects' | 'discount_codes' | 'shipping' | 'swish' | 'paypal' | 'simulation'>('profile');
 
   const [settingCheckoutMode, setSettingCheckoutMode] = useState('booking');
   const [settingDeliveryMethod, setSettingDeliveryMethod] = useState('pickup');
@@ -257,7 +271,20 @@ export default function App() {
       // Fetch public swish info for POS
       axios.get(`${API_BASE_URL}/api/public/settings/swish-info`).then(res => {
         if (res.data && res.data.merchant_id) {
-          setSwishMerchantId(res.data.merchant_id);
+          
+      axios.get(`${API_BASE_URL}/api/settings/shipping`, { headers: { Authorization: `Bearer ${t}` } }).then(res => {
+        setShippingProvider(res.data.provider);
+        setShippingPostnordKey(res.data.postnord_key);
+        setShippingDhlKey(res.data.dhl_key);
+        setShippingDhlAccount(res.data.dhl_account);
+      }).catch(() => {});
+
+      axios.get(`${API_BASE_URL}/api/settings/storefront`, { headers: { Authorization: `Bearer ${t}` } }).then(res => {
+        setStorefrontCompany(res.data.company_name);
+        setStorefrontBanner(res.data.banner_url);
+      }).catch(() => {});
+
+        setSwishMerchantId(res.data.merchant_id);
         }
       }).catch(() => {});
 
@@ -557,6 +584,58 @@ export default function App() {
       alert('Inställningar sparade!');
     } catch (e) {
       alert('Kunde inte spara inställningar.');
+    }
+  };
+
+
+
+  const handleSaveStorefront = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      let finalBannerUrl = storefrontBanner;
+      
+      if (storefrontBannerFile) {
+        setIsUploadingBanner(true);
+        const formData = new FormData();
+        formData.append('image', storefrontBannerFile);
+        const uploadRes = await axios.post(`${API_BASE_URL}/api/upload/image`, formData, { headers: { Authorization: `Bearer ${token}` } });
+        if (uploadRes.data.success) {
+          finalBannerUrl = uploadRes.data.url;
+          setStorefrontBanner(finalBannerUrl);
+          setStorefrontBannerFile(null);
+        } else {
+          alert('Det gick inte att ladda upp bilden.');
+          setIsUploadingBanner(false);
+          return;
+        }
+        setIsUploadingBanner(false);
+      }
+
+      await axios.post(`${API_BASE_URL}/api/settings/storefront`, {
+        company_name: storefrontCompany,
+        banner_url: finalBannerUrl
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      alert('Butiksdesign sparad!');
+    } catch (err) {
+      alert('Misslyckades att spara butiksdesign.');
+      setIsUploadingBanner(false);
+    }
+  };
+
+  const handleSaveShippingSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_BASE_URL}/api/settings/shipping`, {
+        provider: shippingProvider,
+        postnord_key: shippingPostnordKey,
+        dhl_key: shippingDhlKey,
+        dhl_account: shippingDhlAccount
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      alert('Fraktinställningar sparades!');
+    } catch (err) {
+      alert('Misslyckades att spara fraktinställningar.');
     }
   };
 
@@ -1119,6 +1198,7 @@ export default function App() {
 
                 <div className="settings-tabs-list desktop-only" style={{ marginBottom: 20, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button type="button" onClick={() => setAdminActiveTab('users')} className={`btn btn-sm ${adminActiveTab === 'users' ? 'btn-primary' : 'btn-ghost'}`}>Personalkonton</button>
+                  <button type="button" onClick={() => setAdminActiveTab('storefront')} className={`btn btn-sm ${adminActiveTab === 'storefront' ? 'btn-primary' : 'btn-ghost'}`}>Butiksdesign</button>
                   <button type="button" onClick={() => setAdminActiveTab('projects')} className={`btn btn-sm ${adminActiveTab === 'projects' ? 'btn-primary' : 'btn-ghost'}`}>Kategorier &amp; Marginal</button>
                   <button type="button" onClick={() => setAdminActiveTab('discount_codes')} className={`btn btn-sm ${adminActiveTab === 'discount_codes' ? 'btn-primary' : 'btn-ghost'}`}>Rabattkoder</button>
                   <button type="button" onClick={() => setAdminActiveTab('paypal')} className={`btn btn-sm ${adminActiveTab === 'paypal' ? 'btn-primary' : 'btn-ghost'}`}>PayPal Integration</button>
@@ -1135,6 +1215,7 @@ export default function App() {
                     style={{ width: '100%', height: 42 }}
                   >
                     <option value="users">Personalkonton</option>
+                    <option value="storefront">Butiksdesign</option>
                     <option value="projects">Kategorier &amp; Marginal</option>
                     <option value="discount_codes">Rabattkoder</option>
                     <option value="paypal">PayPal Integration</option>
@@ -1145,6 +1226,62 @@ export default function App() {
 
                 <div className="glass-card" style={{ padding: 24, minHeight: 400 }}>
                   
+                  {/* SUB-TAB: storefront (BUTIKSDESIGN) */}
+                  {adminActiveTab === 'storefront' && (
+                    <div>
+                      <h3>Anpassa Kundportal & Butiksdesign</h3>
+                      <form onSubmit={handleSaveStorefront} style={{ marginBottom: 20 }}>
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label>Företagsnamn / Butikens namn *</label>
+                          <input
+                            type="text"
+                            placeholder="T.ex. Min Fina Butik AB"
+                            value={storefrontCompany}
+                            onChange={(e) => setStorefrontCompany(e.target.value)}
+                            required
+                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                        </div>
+
+                        <div className="input-container" style={{ marginBottom: 15 }}>
+                          <label>Bannerbild / Logotyp</label>
+                          <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => setStorefrontBannerFile(e.target.files ? e.target.files[0] : null)}
+                              style={{ flex: 1, padding: 8, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                            />
+                            {isUploadingBanner && <span style={{ fontSize: '0.8rem', color: '#60a5fa' }}>Laddar upp och optimerar...</span>}
+                          </div>
+                          
+                          <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Eller klistra in en bildlänk (URL):</label>
+                          <input
+                            type="url"
+                            placeholder="T.ex. https://exempel.se/bild.png"
+                            value={storefrontBanner}
+                            onChange={(e) => { setStorefrontBanner(e.target.value); setStorefrontBannerFile(null); }}
+                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'block', marginTop: 4 }}>
+                            Laddar du upp en bild från datorn så krymps och komprimeras den automatiskt.
+                          </span>
+                        </div>
+
+                        {storefrontBanner && (
+                          <div style={{ marginBottom: 15 }}>
+                            <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Förhandsgranskning (Maxhöjd 200px):</label>
+                            <div style={{ marginTop: 8, padding: 10, background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-light)', borderRadius: 6, display: 'flex', justifyContent: 'center' }}>
+                              <img src={storefrontBanner} alt="Banner Preview" style={{ maxHeight: 200, maxWidth: '100%', objectFit: 'contain' }} />
+                            </div>
+                          </div>
+                        )}
+
+                        <button type="submit" className="btn btn-primary btn-sm">Spara Design</button>
+                      </form>
+                    </div>
+                  )}
+
                   {/* SUB-TAB: users (STAFF CRUD) */}
                   {adminActiveTab === 'users' && (
                     <div>
@@ -1706,6 +1843,64 @@ export default function App() {
                           </button>
                         </div>
                       </div>
+                    </div>
+                  )}
+
+                  
+                  {/* SUB-TAB: shipping (FRAKT) */}
+                  {adminActiveTab === 'shipping' && (
+                    <div>
+                      <h3>Frakt & Logistik (PostNord / DHL)</h3>
+                      <form onSubmit={handleSaveShippingSettings}>
+                        <div className="input-container" style={{ marginBottom: 15 }}>
+                          <label>Aktivt Fraktbolag *</label>
+                          <select
+                            value={shippingProvider}
+                            onChange={(e) => setShippingProvider(e.target.value)}
+                            className="custom-select"
+                            style={{ width: '100%', height: 42 }}
+                          >
+                            <option value="postnord">PostNord (Standard API)</option>
+                            <option value="dhl">DHL (Standard API)</option>
+                          </select>
+                        </div>
+
+                        <h4 style={{ marginTop: 20 }}>PostNord API-nycklar</h4>
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label>PostNord API Key</label>
+                          <input
+                            type="text"
+                            placeholder="Klistra in din PostNord API-nyckel..."
+                            value={shippingPostnordKey}
+                            onChange={(e) => setShippingPostnordKey(e.target.value)}
+                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                        </div>
+
+                        <h4 style={{ marginTop: 20 }}>DHL API-nycklar</h4>
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label>DHL API Key</label>
+                          <input
+                            type="text"
+                            placeholder="Klistra in din DHL API-nyckel..."
+                            value={shippingDhlKey}
+                            onChange={(e) => setShippingDhlKey(e.target.value)}
+                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                        </div>
+                        <div className="input-container" style={{ marginBottom: 12 }}>
+                          <label>DHL Kundnummer (Account Number)</label>
+                          <input
+                            type="text"
+                            placeholder="T.ex. 123456789"
+                            value={shippingDhlAccount}
+                            onChange={(e) => setShippingDhlAccount(e.target.value)}
+                            style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                          />
+                        </div>
+
+                        <button type="submit" className="btn btn-primary btn-sm" style={{ marginTop: 15 }}>Spara fraktinställningar</button>
+                      </form>
                     </div>
                   )}
 

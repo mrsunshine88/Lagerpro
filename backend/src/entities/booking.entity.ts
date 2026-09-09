@@ -42,6 +42,12 @@ export class Booking {
   @Property({ type: 'float', default: 0.0 })
   shippingCost = 0.0;
 
+  @Property({ nullable: true })
+  trackingNumber?: string;
+
+  @Property({ type: 'text', nullable: true })
+  shippingLabelUrl?: string;
+
   @Property({ defaultRaw: 'CURRENT_TIMESTAMP' })
   createdAt = new Date();
 }
