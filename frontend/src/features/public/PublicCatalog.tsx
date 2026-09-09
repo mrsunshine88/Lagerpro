@@ -672,11 +672,18 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                       onClick={() => {
                         const variant = selectedPDPProduct.variants.find((v:any) => v.id === pdpSelectedVariantId);
                         if (variant) {
-                          setPublicCart(prev => {
-                            const existing = prev.find(p => p.variant.id === variant.id);
-                            if (existing) return prev.map(p => p.variant.id === variant.id ? { ...p, cart_qty: p.cart_qty + 1 } : p);
-                            return [...prev, { variant, product: selectedPDPProduct, cart_qty: 1 }];
-                          });
+                          setPublicCart(prev => [
+                            ...prev,
+                            {
+                              variant,
+                              product_name: selectedPDPProduct.name,
+                              product_category: selectedPDPProduct.category,
+                              quantity: 1,
+                              original_price: variant.original_price,
+                              selling_price: variant.selling_price,
+                              image_url: variant.image_url
+                            }
+                          ]);
                           setCartModalOpen(true);
                           setPdpSelectedVariantId(null);
                         }
