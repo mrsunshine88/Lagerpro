@@ -375,7 +375,7 @@ const apiClient = {
       const { data: res, error } = await supabase.from('users').insert({
         email: data.email,
         role: data.role,
-        allowed_projects: data.allowed_projects || []
+        allowed_projects: data.allowed_projects || ''
       }).select().single();
       if (error) throw error;
       
