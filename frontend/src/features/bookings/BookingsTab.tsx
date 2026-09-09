@@ -291,7 +291,7 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({
                       <CreditCard style={{ width: 16, height: 16, color: '#34d399' }} />
                     </div>
                     <span style={{ fontSize: '0.95rem', fontWeight: 600, color: 'white' }}>
-                      {selectedBooking.payment_status === 'paid' ? 'Betald (Swish)' : selectedBooking.payment_status === 'refunded' ? 'Återbetald' : 'Ej betald (Butik)'}
+                      {(selectedBooking.payment_status === 'paid' || selectedBooking.payment_status === 'paid_paypal') ? 'Betald' : selectedBooking.payment_status === 'refunded' ? 'Återbetald' : 'Ej betald (Butik)'}
                     </span>
                   </div>
                   <div style={{ marginLeft: 34, marginTop: 8 }}>
@@ -337,7 +337,7 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({
                         </button>
                       )}
                       <button onClick={() => { handleConfirmBooking(selectedBooking.id); setSelectedBooking({ ...selectedBooking, status: 'confirmed' }); }} className="btn btn-success" style={{ width: 160 }}>
-                        {selectedBooking.payment_status === 'paid' ? 'Bekräfta överlämning' : 'Bekräfta hämtning'}
+                        {selectedBooking.delivery_method === 'shipping' ? 'Bekräfta skickad' : ((selectedBooking.payment_status === 'paid' || selectedBooking.payment_status === 'paid_paypal') ? 'Bekräfta överlämning' : 'Bekräfta hämtning')}
                       </button>
                       <button onClick={() => { handleReserveBooking(selectedBooking.id); setSelectedBooking({ ...selectedBooking, status: 'reserved' }); }} className="btn btn-secondary" style={{ width: 160, borderColor: 'var(--color-accent)', color: 'var(--color-accent)' }}>
                         Lägg undan
@@ -351,7 +351,7 @@ export const BookingsTab: React.FC<BookingsTabProps> = ({
                   {selectedBooking.status === 'reserved' && (
                     <>
                       <button onClick={() => { handleConfirmBooking(selectedBooking.id); setSelectedBooking({ ...selectedBooking, status: 'confirmed' }); }} className="btn btn-success" style={{ width: 160 }}>
-                        {selectedBooking.payment_status === 'paid' ? 'Bekräfta överlämning' : 'Bekräfta hämtning'}
+                        {selectedBooking.delivery_method === 'shipping' ? 'Bekräfta skickad' : ((selectedBooking.payment_status === 'paid' || selectedBooking.payment_status === 'paid_paypal') ? 'Bekräfta överlämning' : 'Bekräfta hämtning')}
                       </button>
                       <button onClick={() => { handleCancelBooking(selectedBooking.id); setSelectedBooking(null); }} className="btn btn-ghost" style={{ width: 160, color: 'var(--color-danger)' }}>
                         Makulera order

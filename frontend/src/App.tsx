@@ -33,7 +33,18 @@ import {
   User,
   CalendarCheck,
   Check,
+  Edit3,
+  Save,
+  ExternalLink,
+  Activity,
+  Users,
+  Settings2,
+  Image,
+  Key,
+  Zap,
   MapPin,
+  Ticket,
+  Truck,
   RefreshCw,
   Eye,
   Menu
@@ -50,6 +61,7 @@ import { QRModal } from './components/QRModal';
 import { PosTab } from './features/pos/PosTab';
 import { InventoryTab } from './features/inventory/InventoryTab';
 import { BookingsTab } from './features/bookings/BookingsTab';
+import { ShippingTab } from './features/shipping/ShippingTab';
 import { AnalyticsTab } from './features/analytics/AnalyticsTab';
 import { PublicCatalog } from './features/public/PublicCatalog';
 import InstallPWA from './components/InstallPWA';
@@ -97,7 +109,7 @@ export default function App() {
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
 
   // --- NAVIGATION TAB ---
-  const [activeTab, setActiveTab] = useState<'hub' | 'pos' | 'inventory' | 'bookings' | 'analytics' | 'admin'>('hub');
+  const [activeTab, setActiveTab] = useState<'hub' | 'pos' | 'inventory' | 'bookings' | 'shipping' | 'analytics' | 'admin'>('hub');
   const [adminActiveTab, setAdminActiveTab] = useState<'users' | 'projects' | 'storefront' | 'discount_codes' | 'shipping' | 'swish' | 'paypal' | 'simulation'>('users');
   const [confirmState, setConfirmState] = useState<{ message: string; resolve: (val: boolean) => void } | null>(null);
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' | 'info' }[]>([]);
@@ -261,14 +273,42 @@ export default function App() {
       .channel('schema-db-changes')
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'bookings'
-        },
+        { event: '*', schema: 'public', table: 'bookings' },
         (payload: any) => {
-          console.log('Realtime booking update received:', payload);
+          console.log('Realtime bookings update received:', payload);
           fetchBookings();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'variants' },
+        (payload: any) => {
+          console.log('Realtime variants update received:', payload);
+          fetchProducts();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' },
+        (payload: any) => {
+          console.log('Realtime products update received:', payload);
+          fetchProducts();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        (payload: any) => {
+          console.log('Realtime transactions update received:', payload);
+          fetchAnalytics();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'settings' },
+        (payload: any) => {
+          console.log('Realtime settings update received:', payload);
+          fetchProjects();
         }
       )
       .subscribe();
@@ -1003,6 +1043,13 @@ export default function App() {
                     <span className="bookings-notif-badge">{allowedBookings.filter((b) => b.status === 'pending').length}</span>
                   )}
                 </button>
+                <button onClick={() => { setActiveTab('shipping'); setMobileMenuOpen(false); }} className={`nav-tab ${activeTab === 'shipping' ? 'active' : ''}`}>
+                  <Truck />
+                  <span>Fraktsedlar</span>
+                  {allowedBookings.filter((b) => b.delivery_method === 'shipping' && b.status === 'pending').length > 0 && (
+                    <span className="bookings-notif-badge" style={{ background: 'var(--color-primary)' }}>{allowedBookings.filter((b) => b.delivery_method === 'shipping' && b.status === 'pending').length}</span>
+                  )}
+                </button>
                 {userProfile?.role === 'admin' && (
                   <>
                     <button onClick={() => { setActiveTab('analytics'); setMobileMenuOpen(false); }} className={`nav-tab ${activeTab === 'analytics' ? 'active' : ''}`}>
@@ -1188,6 +1235,16 @@ export default function App() {
                 userProfile={userProfile}
                 fetchAnalytics={fetchAnalytics}
                 fetchProducts={fetchProducts}
+                apiBaseUrl={API_BASE_URL}
+                getAxiosConfig={getAxiosConfig}
+              />
+            )}
+
+            {/* --- TAB: SHIPPING --- */}
+            {activeTab === 'shipping' && (
+              <ShippingTab
+                bookings={allowedBookings}
+                fetchBookings={fetchBookings}
                 apiBaseUrl={API_BASE_URL}
                 getAxiosConfig={getAxiosConfig}
               />

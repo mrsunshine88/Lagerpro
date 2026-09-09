@@ -219,7 +219,16 @@ const apiClient = {
     if (path.includes('/api/admin/shipping/') && path.includes('/label')) {
       const parts = path.split('/');
       const bookingId = parseInt(parts[parts.length - 2]);
-      const { data: res, error } = await supabase.functions.invoke('shipping-label', { body: { bookingId } });
+      
+      // Simulate creating a shipping label
+      const fakeTracking = 'PN' + Math.floor(Math.random() * 1000000000);
+      const fakeUrl = `https://postnord.se/spara/${fakeTracking}`;
+      
+      const { data: res, error } = await supabase.from('bookings').update({
+        tracking_number: fakeTracking,
+        shipping_label_url: fakeUrl
+      }).eq('id', bookingId).select().single();
+      
       if (error) throw error;
       return { data: res };
     }

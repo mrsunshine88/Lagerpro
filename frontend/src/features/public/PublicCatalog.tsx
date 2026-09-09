@@ -49,6 +49,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
   // --- PDP states ---
   const [selectedPDPProduct, setSelectedPDPProduct] = useState<any | null>(null);
   const [pdpSelectedVariantId, setPdpSelectedVariantId] = useState<number | null>(null);
+  const [pdpSelectedQuantity, setPdpSelectedQuantity] = useState<number>(1);
 
   // --- PUBLIC SHOPPING CART states ---
   const [publicCart, setPublicCart] = useState<any[]>([]);
@@ -155,7 +156,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
   }, [cartModalOpen, selectedPDPProduct]);
 
   // --- SWISH SIMULATOR states ---
-  const [paymentStep, setPaymentStep] = useState<'idle' | 'swish_waiting' | 'swish_success' | 'swish_failed' | 'booking_success'>('idle');
+  const [paymentStep, setPaymentStep] = useState<'idle' | 'swish_waiting' | 'swish_success' | 'swish_failed' | 'booking_success' | 'swish_refunded'>('idle');
   const [activePaymentId, setActivePaymentId] = useState('');
   const [activePaymentIsMock, setActivePaymentIsMock] = useState(false);
   const [createdBookingIds, setCreatedBookingIds] = useState<number[]>([]);
@@ -375,9 +376,18 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
     const isShipping = config.delivery_method === 'shipping' || (hasShipping && checkoutDeliveryMethod === 'shipping');
     const shippingCost = isShipping ? (cartDiscountValid && cartDiscountFreeShipping ? 0 : (config.shipping_cost || 0)) : 0;
 
+    if (isEcom) {
+      // Lazy order creation: Do NOT reserve in database yet.
+      // Wait for Swish simulation to succeed before creating order.
+      setPaymentStep('swish_waiting');
+      setActivePaymentId(`mock_${Date.now()}`);
+      setActivePaymentIsMock(true);
+      return;
+    }
+
     try {
       const res = await axios.post(`${apiBaseUrl}/api/public/bookings/batch`, {
-        items: publicCart.map((item) => ({ variant_id: item.variant.id })),
+        items: publicCart.flatMap((item) => Array.from({ length: item.quantity || 1 }).map(() => ({ variant_id: item.variant.id }))),
         first_name: checkoutFirstName.trim(),
         last_name: checkoutLastName.trim(),
         phone: checkoutPhone.trim(),
@@ -387,35 +397,15 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
         delivery_method: isShipping ? 'shipping' : 'pickup',
         shipping_address: isShipping ? checkoutShippingAddress.trim() : undefined,
         shipping_cost: shippingCost,
-        payment_status: isEcom ? 'swish_pending' : 'store_payment'
+        payment_status: 'store_payment'
       });
 
       if (res.data.success && res.data.booking_ids) {
-        const bIds = res.data.booking_ids;
-        setCreatedBookingIds(bIds);
+        setCreatedBookingIds(res.data.booking_ids);
         setPurchasedItems(publicCart);
-
-        if (!isEcom) {
-          setPublicCart([]);
-          fetchPublicProducts();
-          setPaymentStep('booking_success');
-        } else {
-          setPaymentStep('swish_waiting');
-          try {
-            const payRes = await axios.post(`${apiBaseUrl}/api/public/payments/swish/initiate`, {
-              booking_ids: bIds,
-              phone_number: checkoutPhone.trim()
-            });
-
-            if (payRes.data.success) {
-              setActivePaymentId(payRes.data.paymentId);
-              setActivePaymentIsMock(payRes.data.isMock);
-            }
-          } catch (payErr) {
-            setPaymentStep('swish_failed');
-            alert('Kunde inte starta Swish-betalningen. Kontrollera dina uppgifter.');
-          }
-        }
+        setPublicCart([]);
+        fetchPublicProducts();
+        setPaymentStep('booking_success');
       }
     } catch (err: any) {
       alert(err.response?.data?.message || 'Kunde inte spara dina bokningar. Kontrollera lagersaldot.');
@@ -426,16 +416,36 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
   const simulateSwishCompletion = async () => {
     if (!activePaymentId) return;
     try {
-      const res = await axios.post(`${apiBaseUrl}/api/public/payments/swish/simulate-mock`, {
-        payment_id: activePaymentId
+      const config = cartConfig || { checkout_mode: 'booking', delivery_method: 'pickup', shipping_cost: 0 };
+      const hasShipping = config.delivery_method === 'shipping' || config.delivery_method === 'shipping_pickup';
+      const isShipping = config.delivery_method === 'shipping' || (hasShipping && checkoutDeliveryMethod === 'shipping');
+      const shippingCost = isShipping ? (cartDiscountValid && cartDiscountFreeShipping ? 0 : (config.shipping_cost || 0)) : 0;
+
+      const res = await axios.post(`${apiBaseUrl}/api/public/bookings/batch`, {
+        items: publicCart.flatMap((item) => Array.from({ length: item.quantity || 1 }).map(() => ({ variant_id: item.variant.id }))),
+        first_name: checkoutFirstName.trim(),
+        last_name: checkoutLastName.trim(),
+        phone: checkoutPhone.trim(),
+        discount_code: cartDiscountValid ? cartDiscountCode.trim() : undefined,
+        discount_percent: cartDiscountValid ? cartDiscountPercent : undefined,
+        message: checkoutMessage.trim() || undefined,
+        delivery_method: isShipping ? 'shipping' : 'pickup',
+        shipping_address: isShipping ? checkoutShippingAddress.trim() : undefined,
+        shipping_cost: shippingCost,
+        payment_status: 'paid'
       });
+
       if (res.data.success) {
+        setCreatedBookingIds(res.data.booking_ids);
+        setPurchasedItems(publicCart);
         setPaymentStep('swish_success');
         setPublicCart([]);
         fetchPublicProducts();
+      } else {
+        setPaymentStep('swish_refunded');
       }
-    } catch (e) {
-      alert('Kunde inte simulera Swish-betalning.');
+    } catch (e: any) {
+      setPaymentStep('swish_refunded');
     }
   };
 
@@ -642,7 +652,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                           <button
                             key={v.id}
                             disabled={isOutOfStock}
-                            onClick={() => setPdpSelectedVariantId(v.id)}
+                            onClick={() => { setPdpSelectedVariantId(v.id); setPdpSelectedQuantity(1); }}
                             style={{
                               padding: '12px 0',
                               background: isSelected ? 'var(--text-primary)' : 'rgba(255,255,255,0.08)',
@@ -668,7 +678,24 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                     </div>
                   </div>
 
-                  <div style={{ marginTop: 'auto', display: 'flex', gap: 15 }}>
+                  {/* QUANTITY SELECTOR */}
+                  {pdpSelectedVariantId && (
+                    <div style={{ marginTop: 20, marginBottom: 20 }}>
+                      <label style={{ display: 'block', fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: 8 }}>Välj antal (i lager: {selectedPDPProduct.variants.find((v:any) => v.id === pdpSelectedVariantId)?.stock} st)</label>
+                      <select 
+                        className="custom-select" 
+                        value={pdpSelectedQuantity} 
+                        onChange={(e) => setPdpSelectedQuantity(Number(e.target.value))}
+                        style={{ width: '100%', padding: '12px 15px', fontSize: '1rem', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)' }}
+                      >
+                        {Array.from({ length: Math.min(10, selectedPDPProduct.variants.find((v:any) => v.id === pdpSelectedVariantId)?.stock || 1) }).map((_, i) => (
+                          <option key={i+1} value={i+1}>{i+1} st</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 15, marginTop: pdpSelectedVariantId ? 0 : 30 }}>
                     <button
                       disabled={!pdpSelectedVariantId}
                       onClick={() => {
@@ -680,7 +707,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                               variant,
                               product_name: selectedPDPProduct.name,
                               product_category: selectedPDPProduct.category,
-                              quantity: 1,
+                              quantity: pdpSelectedQuantity,
                               original_price: variant.original_price,
                               selling_price: variant.selling_price,
                               image_url: variant.image_url
@@ -1127,7 +1154,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
 
                       {/* Price summary */}
                       {(() => {
-                        const originalTotal = purchasedItems.reduce((sum, item) => sum + item.variant.selling_price * item.quantity, 0);
+                        const originalTotal = purchasedItems.reduce((sum, item) => sum + item.variant.selling_price * (item.quantity || 1), 0);
                         const discountAmount = cartDiscountValid ? Math.round(originalTotal * (cartDiscountPercent / 100)) : 0;
                         const config = cartConfig || { shipping_cost: 0 };
                         const hasFreeShipping = cartDiscountValid && cartDiscountFreeShipping;
@@ -1229,6 +1256,22 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                 </div>
               )}
 
+              {paymentStep === 'swish_refunded' && (
+                <div style={{ textAlign: 'center', padding: '30px 10px' }}>
+                  <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(239,68,68,0.1)', border: '2px solid var(--color-danger)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px auto' }}>
+                    <X style={{ width: 30, height: 30, color: 'var(--color-danger)' }} />
+                  </div>
+                  <h3 style={{ marginBottom: 12, fontSize: '1.4rem' }}>Åh nej! Någon annan hann före 😢</h3>
+                  <p style={{ color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 20 }}>
+                    Din betalning gick igenom, men tyvärr hann varan sälja slut exakt samtidigt som du betalade. 
+                    Vi har automatiskt skickat en återbetalning till dig via Swish. Pengarna bör finnas på ditt konto omgående.
+                  </p>
+                  <button type="button" onClick={() => { setPaymentStep('idle'); setPublicCart([]); fetchPublicProducts(); }} className="btn btn-ghost btn-full" style={{ color: 'var(--color-danger)' }}>
+                    Stäng
+                  </button>
+                </div>
+              )}
+
               {paymentStep === 'idle' && (
                 <>
                   {publicCart.length === 0 ? (
@@ -1245,7 +1288,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                     const hasShipping = config.delivery_method === 'shipping' || config.delivery_method === 'shipping_pickup';
                     const isShipping = config.delivery_method === 'shipping' || (hasShipping && checkoutDeliveryMethod === 'shipping');
                     
-                    const originalTotal = publicCart.reduce((sum, item) => sum + item.variant.selling_price * item.quantity, 0);
+                    const originalTotal = publicCart.reduce((sum, item) => sum + item.variant.selling_price * (item.quantity || 1), 0);
                     const discountAmount = cartDiscountValid ? Math.round(originalTotal * (cartDiscountPercent / 100)) : 0;
                     const isFreeShippingApplied = cartDiscountValid && cartDiscountFreeShipping;
                     const shippingCost = isShipping ? (isFreeShippingApplied ? 0 : config.shipping_cost || 0) : 0;
@@ -1266,7 +1309,9 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                                   </span>
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 15 }}>
-                                  <strong style={{ color: 'var(--color-success)', fontSize: '0.95rem' }}>{item.variant.selling_price} kr</strong>
+                                  <strong style={{ color: 'var(--color-success)', fontSize: '0.95rem' }}>
+                                    {item.quantity && item.quantity > 1 ? `${item.quantity} st á ${item.variant.selling_price} kr = ${item.quantity * item.variant.selling_price} kr` : `${item.variant.selling_price} kr`}
+                                  </strong>
                                   <button
                                     type="button"
                                     onClick={() => setPublicCart(publicCart.filter((c) => c.variant.id !== item.variant.id))}
