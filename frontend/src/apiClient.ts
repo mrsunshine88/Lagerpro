@@ -85,6 +85,14 @@ const apiClient = {
       return { data: data || [] };
     }
 
+    if (path.includes('/api/users/profile')) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return { data: null };
+      const { data, error } = await supabase.from('users').select('*').eq('email', session.user.email).maybeSingle();
+      if (error) return { data: null };
+      return { data };
+    }
+
     if (path.includes('/api/users')) {
       const { data, error } = await supabase.from('users').select('*');
       if (error) throw error;
