@@ -671,10 +671,18 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                         }
                       }}
                       className="btn btn-primary"
-                      style={{ flex: 1, padding: '16px 0', fontSize: '1.1rem', fontWeight: 700, borderRadius: 4 }}
+                      style={{ 
+                        flex: 1, 
+                        padding: '16px 0', 
+                        fontSize: '1.1rem', 
+                        fontWeight: 700, 
+                        borderRadius: 4,
+                        opacity: !pdpSelectedVariantId ? 0.6 : 1,
+                        cursor: !pdpSelectedVariantId ? 'not-allowed' : 'pointer'
+                      }}
                     >
                       <ShoppingCart style={{ width: 18, height: 18, marginRight: 8 }} />
-                      Lägg till i varukorgen
+                      {!pdpSelectedVariantId ? 'Välj storlek först' : 'Lägg till i varukorgen'}
                     </button>
                   </div>
                 </div>

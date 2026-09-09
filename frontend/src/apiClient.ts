@@ -1,5 +1,17 @@
 import { supabase } from './supabaseClient';
 
+const generateEAN13 = () => {
+  const prefix = '200';
+  const randomPart = Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
+  const base = prefix + randomPart;
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
+  }
+  const checksum = (10 - (sum % 10)) % 10;
+  return base + checksum.toString();
+};
+
 const getPath = (url: string) => {
   try {
     return new URL(url).pathname;
@@ -215,9 +227,29 @@ const apiClient = {
     }
     
     if (path.includes('/api/bookings/batch')) {
-      const { data: res, error } = await supabase.from('bookings').insert(data.bookings);
-      if (error) throw error;
-      return { data: res };
+      if (data.items) {
+        const rpcPayload = data.items.map((item: any) => ({
+          variant_id: item.variant_id,
+          customer_first_name: data.first_name,
+          customer_last_name: data.last_name,
+          customer_phone: data.phone,
+          discount_code: data.discount_code,
+          message: data.message,
+          delivery_method: data.delivery_method,
+          shipping_address: data.shipping_address,
+          shipping_cost: data.shipping_cost,
+          payment_status: data.payment_status,
+          status: 'pending'
+        }));
+        const { data: res, error } = await supabase.rpc('checkout_cart', { payload: rpcPayload });
+        if (error) throw error;
+        return { data: res };
+      } else if (data.bookings) {
+        const { data: res, error } = await supabase.from('bookings').insert(data.bookings);
+        if (error) throw error;
+        return { data: res };
+      }
+      return { data: { success: false } };
     }
 
     if (path.includes('/api/bookings')) {
@@ -234,7 +266,7 @@ const apiClient = {
       if (pErr) throw pErr;
       if (variants && variants.length > 0) {
         const variantsToInsert = variants.map((v: any) => {
-          const sku = v.sku?.trim() ? v.sku.trim() : `SKU-${prod.id}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+          const sku = v.sku?.trim() ? v.sku.trim() : generateEAN13();
           return {
             product_id: prod.id,
             size: v.size || '',
@@ -346,7 +378,7 @@ const apiClient = {
       await supabase.from('variants').delete().eq('product_id', id);
       if (variants && variants.length > 0) {
         const variantsToInsert = variants.map((v: any) => {
-          const sku = v.sku?.trim() ? v.sku.trim() : `SKU-${id}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+          const sku = v.sku?.trim() ? v.sku.trim() : generateEAN13();
           return {
             product_id: id,
             size: v.size || '',
