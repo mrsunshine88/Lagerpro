@@ -76,7 +76,7 @@ const apiClient = {
       const project = params.get('project');
       const { data, error } = await supabase.from('settings').select('value').eq('key', `project_discount_${project}`).maybeSingle();
       if (error) return { data: { discount_percent: 0 } };
-      return { data: { discount_percent: parseFloat(data.value) || 0 } };
+      return { data: { discount_percent: parseFloat(data?.value) || 0 } };
     }
 
     if (path.includes('/api/discount-codes')) {
