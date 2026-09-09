@@ -52,9 +52,28 @@ const apiClient = {
     }
     
     if (path.includes('/api/analytics')) {
-      const { data, error } = await supabase.functions.invoke('analytics');
-      if (error) throw error;
-      return { data };
+      const dummyData = {
+        is_lump_sum: true,
+        total_sold_units: 0,
+        stock_metrics: {
+          total_cost: 0,
+          potential_sales: 0,
+          potential_profit: 0,
+        },
+        break_even: {
+          total_investment: 0,
+          total_revenue: 0,
+          net_profit: 0,
+        },
+        financials: {
+          today: { revenue: 0, cost: 0, profit: 0, margin: 0 },
+          week: { revenue: 0, cost: 0, profit: 0, margin: 0 },
+          month: { revenue: 0, cost: 0, profit: 0, margin: 0 }
+        },
+        recent_sales: [],
+        project_summaries: []
+      };
+      return { data: dummyData };
     }
     
     if (path.includes('/api/projects') && !path.includes('/config') && !path.includes('/discount') && !path.includes('/investment')) {
@@ -106,6 +125,24 @@ const apiClient = {
       return { data: data?.value || {} };
     }
     
+    if (path.includes('/api/projects/investment')) {
+      const project = params.get('project');
+      const { data, error } = await supabase.from('settings').select('value').eq('key', `investment_${project}`).maybeSingle();
+      if (error || !data) return { data: { investment: 0 } };
+      return { data: { investment: parseFloat(data.value) || 0 } };
+    }
+
+    if (path.includes('/api/paypal/config')) {
+      const { data, error } = await supabase.from('settings').select('*').in('key', ['paypal_client_id', 'paypal_webhook_id', 'paypal_mode', 'paypal_category_filter', 'paypal_secret']);
+      if (error || !data) return { data: {} };
+      const config: any = {};
+      data.forEach((row: any) => {
+        const k = row.key.replace('paypal_', '');
+        config[k] = row.value;
+      });
+      return { data: config };
+    }
+
     if (path.includes('/api/public/paypal/client-id')) {
       const { data, error } = await supabase.from('settings').select('value').eq('key', 'paypal_client_id').maybeSingle();
       if (error || !data) return { data: { client_id: '' } };
