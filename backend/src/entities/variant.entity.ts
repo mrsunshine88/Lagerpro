@@ -4,13 +4,15 @@ import { Product } from './product.entity.js';
 import { Transaction } from './transaction.entity.js';
 import { Booking } from './booking.entity.js';
 
+type Rel<T> = T;
+
 @Entity({ tableName: 'variants' })
 export class Variant {
   @PrimaryKey()
   id!: number;
 
   @ManyToOne(() => Product, { deleteRule: 'cascade' })
-  product!: Product;
+  product!: Rel<Product>;
 
   @Property({ unique: true })
   sku!: string;

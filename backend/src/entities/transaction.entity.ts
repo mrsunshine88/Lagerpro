@@ -1,13 +1,15 @@
 import { Entity, PrimaryKey, Property, ManyToOne } from '@mikro-orm/decorators/legacy';
 import { Variant } from './variant.entity.js';
 
+type Rel<T> = T;
+
 @Entity({ tableName: 'transactions' })
 export class Transaction {
   @PrimaryKey()
   id!: number;
 
   @ManyToOne(() => Variant, { deleteRule: 'cascade' })
-  variant!: Variant;
+  variant!: Rel<Variant>;
 
   @Property()
   type!: string; // 'sale', 'purchase', 'adjustment'

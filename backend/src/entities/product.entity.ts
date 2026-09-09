@@ -2,6 +2,8 @@ import { Entity, PrimaryKey, Property, OneToMany } from '@mikro-orm/decorators/l
 import { Collection, Cascade } from '@mikro-orm/core';
 import { Variant } from './variant.entity.js';
 
+type Rel<T> = T;
+
 @Entity({ tableName: 'products' })
 export class Product {
   @PrimaryKey()
