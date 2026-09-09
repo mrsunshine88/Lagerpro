@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from './apiClient';
+import supabase from './supabaseClient';
 import {
   Home,
   ShoppingCart,
@@ -51,6 +52,7 @@ import { InventoryTab } from './features/inventory/InventoryTab';
 import { BookingsTab } from './features/bookings/BookingsTab';
 import { AnalyticsTab } from './features/analytics/AnalyticsTab';
 import { PublicCatalog } from './features/public/PublicCatalog';
+import InstallPWA from './components/InstallPWA';
 
 export default function App() {
   // --- AUTH STATE ---
@@ -250,6 +252,32 @@ export default function App() {
       fetchPublicProducts();
     }
   }, [token]);
+
+  // --- SUPABASE REALTIME ---
+  useEffect(() => {
+    if (!token) return;
+
+    const channel = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bookings'
+        },
+        (payload) => {
+          console.log('Realtime booking update received:', payload);
+          fetchBookings();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [token]);
+
 
   // Fetch full data if logged in
   useEffect(() => {
@@ -935,6 +963,7 @@ export default function App() {
   // Main UI render
   return (
     <div className="dark-theme">
+      <InstallPWA />
       {/* --- IF PUBLIC CATALOG USER --- */}
       {!token ? (
         <PublicCatalog
