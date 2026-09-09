@@ -1,3 +1,4 @@
+import axios from '../../apiClient';
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { Html5Qrcode } from 'html5-qrcode';

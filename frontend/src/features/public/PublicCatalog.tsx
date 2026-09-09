@@ -1,3 +1,4 @@
+import axios from '../../apiClient';
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
