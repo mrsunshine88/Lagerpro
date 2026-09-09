@@ -58,9 +58,27 @@ const apiClient = {
     }
     
     if (path.includes('/api/bookings')) {
-      const { data, error } = await supabase.from('bookings').select('*').order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('bookings').select(`
+        *,
+        variant:variants (
+          size, color, sku, selling_price, purchase_price,
+          product:products (
+            name, category
+          )
+        )
+      `).order('created_at', { ascending: false });
       if (error) throw error;
-      return { data: data || [] };
+      const mappedData = (data || []).map((b: any) => ({
+        ...b,
+        product_name: b.variant?.product?.name,
+        product_category: b.variant?.product?.category,
+        size: b.variant?.size,
+        color: b.variant?.color,
+        sku: b.variant?.sku,
+        selling_price: b.variant?.selling_price,
+        purchase_price: b.variant?.purchase_price,
+      }));
+      return { data: mappedData };
     }
     
     if (path.includes('/api/analytics')) {
@@ -207,7 +225,30 @@ const apiClient = {
     if (path.includes('/api/bookings/') && path.includes('/confirm')) {
       const parts = path.split('/');
       const id = parseInt(parts[parts.length - 2]);
-      const { data: res, error } = await supabase.from('bookings').update({ status: 'confirmed' }).eq('id', id);
+      
+      const { data: b } = await supabase.from('bookings').select(`
+        *,
+        variant:variants (
+          purchase_price, selling_price
+        )
+      `).eq('id', id).single();
+      
+      const { data: res, error } = await supabase.from('bookings').update({ status: 'confirmed', payment_status: 'paid' }).eq('id', id);
+      
+      if (b && b.payment_status !== 'paid' && b.payment_status !== 'paid_paypal') {
+        const pPrice = b.variant?.purchase_price || 0;
+        const sPrice = b.variant?.selling_price || 0;
+        const discount = b.discount_percent || 0;
+        await supabase.from('transactions').insert({
+          variant_id: b.variant_id,
+          type: 'sale',
+          quantity: 1,
+          purchase_price: pPrice,
+          selling_price: sPrice * (1.0 - (discount / 100.0)),
+          notes: 'Sale from admin confirmation'
+        });
+      }
+      
       if (error) throw error;
       return { data: res };
     }
