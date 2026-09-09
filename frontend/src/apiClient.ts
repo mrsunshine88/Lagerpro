@@ -85,7 +85,7 @@ const apiClient = {
       try { savedProjects = JSON.parse(setData?.value || '[]'); } catch(e) {}
       
       const unique = Array.from(new Set([...prodCategories, ...savedProjects]));
-      return { data: unique.map(u => ({ name: u })) };
+      return { data: unique };
     }
 
     if (path.includes('/api/projects/config') || path.includes('/api/public/projects/config')) {
