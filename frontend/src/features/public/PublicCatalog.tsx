@@ -625,7 +625,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                   <p style={{ color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 30, fontSize: '0.95rem' }}>{selectedPDPProduct.description}</p>
 
                   <div style={{ marginBottom: 30 }}>
-                    <h4 style={{ fontSize: '0.9rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 15 }}>Välj storlek</h4>
+                    <h4 style={{ fontSize: '0.9rem', textTransform: 'uppercase', color: 'var(--text-primary)', fontWeight: 600, marginBottom: 15 }}>Välj storlek</h4>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 10 }}>
                       {selectedPDPProduct.variants.map((v: any) => {
                         const isSelected = pdpSelectedVariantId === v.id;
@@ -637,7 +637,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                             onClick={() => setPdpSelectedVariantId(v.id)}
                             style={{
                               padding: '12px 0',
-                              background: isSelected ? 'var(--text-primary)' : 'transparent',
+                              background: isSelected ? 'var(--text-primary)' : 'rgba(255,255,255,0.08)',
                               border: isSelected ? '1px solid var(--text-primary)' : '1px solid var(--border-light)',
                               color: isSelected ? 'var(--bg-main)' : (isOutOfStock ? 'rgba(255,255,255,0.2)' : 'var(--text-primary)'),
                               borderRadius: 4,
@@ -704,9 +704,9 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                     onClick={() => { setSelectedPDPProduct(p); setPdpSelectedVariantId(null); }}
                     style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', position: 'relative' }}
                   >
-                    <div style={{ position: 'relative', background: 'rgba(255,255,255,0.02)', paddingBottom: '130%', overflow: 'hidden', borderRadius: 4, marginBottom: 12 }}>
+                    <div className="catalog-image-box" style={{ position: 'relative', background: 'rgba(255,255,255,0.02)', paddingBottom: '130%', overflow: 'hidden', borderRadius: 4, marginBottom: 12 }}>
                       {displayImage ? (
-                        <img src={displayImage} alt={p.name} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img src={displayImage} alt={p.name} className="catalog-img-element" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
                         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '3rem', opacity: 0.1 }}>👟</div>
                       )}

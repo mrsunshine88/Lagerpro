@@ -228,18 +228,16 @@ const apiClient = {
       return { data: res };
     }
     
-    if (path.includes('/api/bookings/batch')) {
-      if (data.items) {
-        const rpcPayload = data.items.map((item: any) => ({
-          variant_id: item.variant_id || item.variantId,
+    if (path.includes('/api/admin/checkout') || path.includes('/api/bookings/checkout')) {
+      if (data.bookings && Array.isArray(data.bookings) && data.bookings.length > 0) {
+        const rpcPayload = data.bookings.map((b: any) => ({
+          variant_id: b.variant_id,
           customer_first_name: data.first_name,
           customer_last_name: data.last_name,
+          customer_email: data.email,
           customer_phone: data.phone,
-          discount_code: data.discount_code,
           message: data.message,
-          delivery_method: data.delivery_method,
-          shipping_address: data.shipping_address,
-          shipping_cost: data.shipping_cost,
+          discount_code: data.discount_code,
           payment_status: data.payment_status,
           status: 'pending'
         }));
@@ -248,6 +246,26 @@ const apiClient = {
         return { data: res };
       } else if (data.bookings) {
         const { data: res, error } = await supabase.from('bookings').insert(data.bookings);
+        if (error) throw error;
+        return { data: res };
+      }
+      return { data: { success: false } };
+    }
+
+    if (path.includes('/api/public/bookings/batch')) {
+      if (data.items && Array.isArray(data.items) && data.items.length > 0) {
+        const rpcPayload = data.items.map((item: any) => ({
+          variant_id: item.variant_id || item.variantId,
+          customer_first_name: data.first_name || data.firstName,
+          customer_last_name: data.last_name || data.lastName,
+          customer_email: data.email,
+          customer_phone: data.phone,
+          message: data.message,
+          discount_code: data.discount_code,
+          payment_status: data.payment_status || 'pending',
+          status: 'pending'
+        }));
+        const { data: res, error } = await supabase.rpc('checkout_cart', { payload: rpcPayload });
         if (error) throw error;
         return { data: res };
       }
