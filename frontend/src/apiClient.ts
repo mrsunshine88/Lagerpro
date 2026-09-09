@@ -369,7 +369,7 @@ const apiClient = {
     }
 
     if (path.includes('/api/projects') && !path.includes('/config') && !path.includes('/discount') && !path.includes('/investment')) {
-      const projectName = config?.data?.name || data?.name;
+      const projectName = config?.data?.name;
       if (projectName) {
         const { data: current } = await supabase.from('settings').select('value').eq('key', 'projects_list').maybeSingle();
         let list: string[] = [];
