@@ -501,8 +501,13 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
                           <div style={{ textAlign: 'right' }}>
                             {v.original_price && v.original_price > v.selling_price ? (
                               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                <span style={{ fontSize: '0.65rem', textDecoration: 'line-through', color: 'var(--text-muted)' }}>{v.original_price} kr</span>
-                                <strong style={{ color: 'var(--color-success)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>{v.selling_price} kr</strong>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <span style={{ fontSize: '0.65rem', textDecoration: 'line-through', color: 'var(--text-muted)' }}>{v.original_price} kr</span>
+                                  <span style={{ background: 'var(--color-danger)', color: 'white', padding: '1px 4px', borderRadius: 4, fontSize: '0.6rem', fontWeight: 700 }}>
+                                    -{Math.round(((v.original_price - v.selling_price) / v.original_price) * 100)}%
+                                  </span>
+                                </div>
+                                <strong style={{ color: 'var(--color-danger)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>{v.selling_price} kr</strong>
                               </div>
                             ) : (
                               <strong style={{ color: '#38bdf8', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>{v.selling_price} kr</strong>

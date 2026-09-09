@@ -1,10 +1,10 @@
 /* ==================== GLOBAL STYLES & THEME ==================== */
 :root {
-    --bg-main: #0b0f19;
-    --bg-card: rgba(20, 26, 42, 0.65);
-    --bg-header: rgba(11, 15, 25, 0.8);
-    --border-light: rgba(255, 255, 255, 0.07);
-    --border-glow: rgba(139, 92, 246, 0.15);
+    --bg-main: #161925; /* Lighter premium dark blue-gray */
+    --bg-card: rgba(33, 38, 54, 0.85); /* More visible cards */
+    --bg-header: rgba(22, 25, 37, 0.9);
+    --border-light: rgba(255, 255, 255, 0.15); /* Higher contrast borders */
+    --border-glow: rgba(139, 92, 246, 0.35);
     
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
