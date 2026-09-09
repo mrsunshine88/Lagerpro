@@ -66,6 +66,11 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
   const [productVariants, setProductVariants] = useState<Partial<Variant>[]>([]);
   const [activeDiscount, setActiveDiscount] = useState<number>(0);
 
+  // Product Image Upload State
+  const [productImageFile, setProductImageFile] = useState<File | null>(null);
+  const [productImageUrl, setProductImageUrl] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
   // Camera scanning states
   const [cameraScanModalOpen, setCameraScanModalOpen] = useState(false);
   const [activeVariantScanIndex, setActiveVariantScanIndex] = useState<number | null>(null);
@@ -228,10 +233,35 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
     e.preventDefault();
     if (!productName.trim()) return;
 
+    let finalImageUrl = productImageUrl;
+    if (productImageFile) {
+      setIsUploadingImage(true);
+      try {
+        const token = localStorage.getItem('token');
+        const formData = new FormData();
+        formData.append('image', productImageFile);
+        const uploadRes = await axios.post(`${apiBaseUrl}/api/upload/image`, formData, { headers: { Authorization: `Bearer ${token}` } });
+        if (uploadRes.data.success) {
+          finalImageUrl = uploadRes.data.url;
+          setProductImageUrl(finalImageUrl);
+        } else {
+          alert('Det gick inte att ladda upp produktbilden.');
+          setIsUploadingImage(false);
+          return;
+        }
+      } catch (err) {
+        alert('Kunde inte ladda upp bilden.');
+        setIsUploadingImage(false);
+        return;
+      }
+      setIsUploadingImage(false);
+    }
+
     const payload = {
       name: productName.trim(),
       category: productCategory,
       description: productDescription,
+      image_url: finalImageUrl,
       discountPercent: productDiscountPercent === '' ? null : productDiscountPercent,
       variantLabel1: productVariantLabel1,
       variantLabel2: productVariantLabel2,
@@ -248,6 +278,9 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
       setEditingProduct(null);
       setProductName('');
       setProductDescription('');
+      setProductImageUrl('');
+      setProductImageFile(null);
+      setProductDiscountPercent('');
       setProductVariants([]);
       fetchProducts();
       if (userProfile?.role === 'admin') fetchAnalytics();
@@ -414,7 +447,9 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
                           setProductName(p.name);
                           setProductCategory(p.category);
                           setProductDescription(p.description || '');
-                          setProductDiscountPercent(p.discount_percent ?? '');
+                          setProductImageUrl(p.imageUrl || '');
+                          setProductImageFile(null);
+                          setProductDiscountPercent(p.discount_percent || '');
                           setProductVariantLabel1(p.variantLabel1 || 'Storlek');
                           setProductVariantLabel2(p.variantLabel2 || 'Färg');
                           setProductVariants(p.variants);
@@ -526,6 +561,37 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
                     <input type="text" value={productDescription} onChange={(e) => setProductDescription(e.target.value)} placeholder="T.ex. Storlekarna är något små..." style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }} />
                   </div>
                 </div>
+
+                <div className="input-container" style={{ marginBottom: 15 }}>
+                  <label>Produktbild (Frivilligt)</label>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setProductImageFile(e.target.files ? e.target.files[0] : null)}
+                      style={{ flex: 1, padding: 8, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                    />
+                    {isUploadingImage && <span style={{ fontSize: '0.8rem', color: '#60a5fa' }}>Laddar upp...</span>}
+                  </div>
+                  
+                  <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Eller klistra in en bildlänk (URL):</label>
+                  <input
+                    type="url"
+                    placeholder="T.ex. https://exempel.se/sko.png"
+                    value={productImageUrl}
+                    onChange={(e) => { setProductImageUrl(e.target.value); setProductImageFile(null); }}
+                    style={{ width: '100%', padding: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-light)', color: 'white', borderRadius: 4 }}
+                  />
+                </div>
+
+                {productImageUrl && (
+                  <div style={{ marginBottom: 15 }}>
+                    <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Förhandsgranskning (Maxhöjd 150px):</label>
+                    <div style={{ marginTop: 8, padding: 10, background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-light)', borderRadius: 6, display: 'flex', justifyContent: 'center' }}>
+                      <img src={productImageUrl} alt="Preview" style={{ maxHeight: 150, maxWidth: '100%', objectFit: 'contain' }} />
+                    </div>
+                  </div>
+                )}
 
                 <div className="input-container" style={{ marginTop: 12 }}>
                   <label>Rabatt (%) på denna produkt</label>
