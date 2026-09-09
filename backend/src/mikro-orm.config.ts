@@ -1,5 +1,4 @@
 import { defineConfig } from '@mikro-orm/postgresql';
-import { ReflectMetadataProvider } from '@mikro-orm/core';
 
 import { Booking } from './entities/booking.entity.js';
 import { DiscountCode } from './entities/discount-code.entity.js';
@@ -13,7 +12,6 @@ export default defineConfig({
   entities: [Booking, DiscountCode, Product, Setting, Transaction, User, Variant],
   dbName: 'lager',
   clientUrl: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/lager',
-  metadataProvider: ReflectMetadataProvider,
   debug: true,
   driverOptions: {
     connection: process.env.DATABASE_URL?.includes('supabase.co') ? {
