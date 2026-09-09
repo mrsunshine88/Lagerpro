@@ -577,13 +577,13 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                 <ArrowLeft style={{ width: 18, height: 18 }} /> Tillbaka till katalogen
               </button>
               {publicCart.length > 0 && (
-                <div style={{ position: 'relative', display: 'inline-flex' }}>
+                <div className="pdp-mobile-cart-wrapper" style={{ position: 'relative' }}>
                   <button onClick={() => setCartModalOpen(true)} className="btn btn-primary" id="pdp-cart-btn" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: 6, background: 'var(--color-accent)', borderColor: 'var(--color-accent)', padding: '8px 14px' }}>
                     <ShoppingCart style={{ width: 16, height: 16 }} />
                     <span className="desktop-only">Visa varukorg</span>
                   </button>
                   <span style={{ position: 'absolute', top: -5, right: -5, background: '#ef4444', color: 'white', borderRadius: '50%', width: 18, height: 18, fontSize: '0.65rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
-                    {publicCart.reduce((sum, item) => sum + item.cart_qty, 0)}
+                    {publicCart.reduce((sum, item) => sum + item.quantity, 0)}
                   </span>
                 </div>
               )}
@@ -1191,6 +1191,8 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                       onClick={() => {
                         setCartModalOpen(false);
                         setPaymentStep('idle');
+                        setSelectedPDPProduct(null);
+                        setPdpSelectedVariantId(null);
                         setCheckoutFirstName('');
                         setCheckoutLastName('');
                         setCheckoutPhone('');
@@ -1232,7 +1234,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                       <ShoppingCart style={{ width: 48, height: 48, color: 'var(--text-muted)', marginBottom: 15 }} />
                       <h3>Din varukorg är tom</h3>
                       <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 20 }}>Gå till katalogen och lägg till produkter.</p>
-                      <button onClick={() => setCartModalOpen(false)} className="btn btn-primary">Tillbaka till butiken</button>
+                      <button onClick={() => { setCartModalOpen(false); setSelectedPDPProduct(null); setPdpSelectedVariantId(null); }} className="btn btn-primary">Tillbaka till butiken</button>
                     </div>
                   ) : (() => {
                     const config = cartConfig || { checkout_mode: 'booking', delivery_method: 'pickup', shipping_cost: 0 };
@@ -1535,7 +1537,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                                     // Trigger backend save
                                     try {
                                       await axios.post(`${apiBaseUrl}/api/public/bookings/batch`, {
-                                        items: publicCart.map(item => ({ variantId: item.variant_id, qty: item.cart_qty })),
+                                        items: publicCart.map(item => ({ variantId: item.variant.id, qty: item.quantity })),
                                         firstName: checkoutFirstName,
                                         lastName: checkoutLastName,
                                         phone: checkoutPhone,

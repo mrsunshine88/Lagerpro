@@ -3834,3 +3834,5 @@ body {
     .filter-box select { padding-top: 11px !important; }
 }
 
+.pdp-mobile-cart-wrapper { display: none !important; }
+@media (max-width: 768px) { .pdp-mobile-cart-wrapper { display: inline-flex !important; } }
