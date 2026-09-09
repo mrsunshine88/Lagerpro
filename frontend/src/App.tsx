@@ -265,7 +265,34 @@ export default function App() {
     }
   }, [token]);
 
-  // --- SUPABASE REALTIME ---
+  // --- SUPABASE REALTIME (PUBLIC) ---
+  useEffect(() => {
+    const publicChannel = supabase
+      .channel('schema-db-changes-public')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'variants' },
+        (payload: any) => {
+          console.log('Public realtime variants update received:', payload);
+          fetchPublicProducts();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' },
+        (payload: any) => {
+          console.log('Public realtime products update received:', payload);
+          fetchPublicProducts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(publicChannel);
+    };
+  }, []);
+
+  // --- SUPABASE REALTIME (ADMIN) ---
   useEffect(() => {
     if (!token) return;
 
