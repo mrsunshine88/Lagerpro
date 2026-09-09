@@ -233,8 +233,22 @@ const apiClient = {
       const { data: prod, error: pErr } = await supabase.from('products').insert(data).select().single();
       if (pErr) throw pErr;
       if (variants && variants.length > 0) {
-        const variantsToInsert = variants.map((v: any) => ({ ...v, product_id: prod.id }));
-        await supabase.from('variants').insert(variantsToInsert);
+        const variantsToInsert = variants.map((v: any) => {
+          const sku = v.sku?.trim() ? v.sku.trim() : `SKU-${prod.id}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+          return {
+            product_id: prod.id,
+            size: v.size || '',
+            color: v.color || '',
+            stock: v.stock || 0,
+            sku: sku,
+            purchase_price: v.purchase_price || v.purchasePrice || 0,
+            selling_price: v.selling_price || v.sellingPrice || 0,
+            original_price: v.original_price || v.originalPrice || 0,
+            image_url: v.image_url || v.imageUrl || null
+          };
+        });
+        const { error: vErr } = await supabase.from('variants').insert(variantsToInsert);
+        if (vErr) throw vErr;
       }
       return { data: prod };
     }
@@ -332,10 +346,21 @@ const apiClient = {
       await supabase.from('variants').delete().eq('product_id', id);
       if (variants && variants.length > 0) {
         const variantsToInsert = variants.map((v: any) => {
-          delete v.id; // delete old ids
-          return { ...v, product_id: id };
+          const sku = v.sku?.trim() ? v.sku.trim() : `SKU-${id}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+          return {
+            product_id: id,
+            size: v.size || '',
+            color: v.color || '',
+            stock: v.stock || 0,
+            sku: sku,
+            purchase_price: v.purchase_price || v.purchasePrice || 0,
+            selling_price: v.selling_price || v.sellingPrice || 0,
+            original_price: v.original_price || v.originalPrice || 0,
+            image_url: v.image_url || v.imageUrl || null
+          };
         });
-        await supabase.from('variants').insert(variantsToInsert);
+        const { error: vErr } = await supabase.from('variants').insert(variantsToInsert);
+        if (vErr) throw vErr;
       }
       return { data: { success: true } };
     }
