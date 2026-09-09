@@ -233,28 +233,18 @@ export default function App() {
   // --- FETCH EFFECT ---
   useEffect(() => {
     if (token) {
-      // Decode JWT profile
-      try {
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(
-          window
-            .atob(base64)
-            .split('')
-            .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-            .join('')
-        );
-        const payload = JSON.parse(jsonPayload);
-        setUserProfile({
-          id: payload.sub,
-          email: payload.email,
-          role: payload.role,
-          allowed_projects: payload.allowedProjects
+      // Fetch profile from database instead of decoding Supabase JWT
+      axios.get(`${API_BASE_URL}/api/users/profile`, getAxiosConfig())
+        .then(res => {
+          if (res.data) {
+            setUserProfile(res.data);
+          } else {
+            handleLogout();
+          }
+        })
+        .catch(() => {
+          handleLogout();
         });
-      } catch (e) {
-        // Token invalid
-        handleLogout();
-      }
     } else {
       setUserProfile(null);
       fetchPublicProducts();
