@@ -197,6 +197,16 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
     return matchesSearch && matchesCategory && matchesSize && matchesPrice && matchesStock;
   });
 
+  // Keep selectedPDPProduct in sync with realtime publicProducts updates
+  useEffect(() => {
+    if (selectedPDPProduct && publicProducts) {
+      const updatedProduct = publicProducts.find(p => p.id === selectedPDPProduct.id);
+      if (updatedProduct && JSON.stringify(updatedProduct) !== JSON.stringify(selectedPDPProduct)) {
+        setSelectedPDPProduct(updatedProduct);
+      }
+    }
+  }, [publicProducts]);
+
   // Swish Polling effect
   useEffect(() => {
     if (paymentStep !== 'swish_waiting' || createdBookingIds.length === 0) return;
