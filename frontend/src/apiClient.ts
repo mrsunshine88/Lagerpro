@@ -64,28 +64,12 @@ const apiClient = {
     }
     
     if (path.includes('/api/analytics')) {
-      const dummyData = {
-        is_lump_sum: true,
-        total_sold_units: 0,
-        stock_metrics: {
-          total_cost: 0,
-          potential_sales: 0,
-          potential_profit: 0,
-        },
-        break_even: {
-          total_investment: 0,
-          total_revenue: 0,
-          net_profit: 0,
-        },
-        financials: {
-          today: { revenue: 0, cost: 0, profit: 0, margin: 0 },
-          week: { revenue: 0, cost: 0, profit: 0, margin: 0 },
-          month: { revenue: 0, cost: 0, profit: 0, margin: 0 }
-        },
-        recent_sales: [],
-        project_summaries: []
-      };
-      return { data: dummyData };
+      const { data, error } = await supabase.rpc('get_analytics');
+      if (error) {
+        console.error('Analytics error:', error);
+        return { data: {} };
+      }
+      return { data: data || {} };
     }
     
     if (path.includes('/api/projects') && !path.includes('/config') && !path.includes('/discount') && !path.includes('/investment')) {
@@ -113,6 +97,24 @@ const apiClient = {
       const { data, error } = await supabase.from('settings').select('value').eq('key', `project_discount_${project}`).maybeSingle();
       if (error) return { data: { discount_percent: 0 } };
       return { data: { discount_percent: parseFloat(data?.value) || 0 } };
+    }
+
+    if (path.includes('/api/public/discount-codes/validate')) {
+      const code = params.get('code') || '';
+      const category = params.get('category') || '';
+      
+      const { data, error } = await supabase.from('discount_codes').select('*').ilike('code', code).maybeSingle();
+      if (error || !data) {
+        return { data: { valid: false, message: 'Ogiltig rabattkod' } };
+      }
+      
+      // Check if project applies
+      const project = (data.project || '').toLowerCase();
+      if (project !== 'alla' && project !== 'allmänt' && project !== 'all' && project !== category.toLowerCase()) {
+        return { data: { valid: false, project: data.project } };
+      }
+      
+      return { data: { valid: true, discountPercent: data.discount_percent, freeShipping: data.free_shipping } };
     }
 
     if (path.includes('/api/discount-codes')) {
@@ -336,6 +338,8 @@ const apiClient = {
     if (path.includes('/api/projects/discount')) {
       const { error } = await supabase.from('settings').upsert({ key: `project_discount_${data.project}`, value: data.discount_percent, project: data.project }, { onConflict: 'key' });
       if (error) throw error;
+      // Tell DB to recalculate prices for this category
+      await supabase.rpc('apply_project_discount', { p_category: data.project, p_discount: data.discount_percent });
       return { data: { success: true } };
     }
 
@@ -358,6 +362,24 @@ const apiClient = {
       // also update public user table
       await supabase.from('users').update({ email: data.email }).eq('email', data.email);
       return { data: { success: true, email: data.email, message: 'Profile updated' } };
+    }
+
+    if (path.includes('/api/users') && !path.includes('/profile')) {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+      });
+      if (authError) throw authError;
+
+      // also insert into public users table
+      const { data: res, error } = await supabase.from('users').insert({
+        email: data.email,
+        role: data.role,
+        allowed_projects: data.allowed_projects || []
+      }).select().single();
+      if (error) throw error;
+      
+      return { data: res };
     }
 
     console.warn('Unhandled POST', path);
