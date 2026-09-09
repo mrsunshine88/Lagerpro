@@ -66,7 +66,7 @@ const apiClient = {
 
     if (path.includes('/api/projects/config') || path.includes('/api/public/projects/config')) {
       const project = params.get('project');
-      const { data, error } = await supabase.from('settings').select('*').eq('project', project).single();
+      const { data, error } = await supabase.from('settings').select('*').eq('project', project).maybeSingle();
       if (error) return { data: {} };
       return { data: data?.value || {} };
     }
@@ -74,7 +74,7 @@ const apiClient = {
     if (path.includes('/api/projects/discount')) {
       // It expects project discount percentage. This is saved in settings under 'project_discount_NAME'.
       const project = params.get('project');
-      const { data, error } = await supabase.from('settings').select('value').eq('key', `project_discount_${project}`).single();
+      const { data, error } = await supabase.from('settings').select('value').eq('key', `project_discount_${project}`).maybeSingle();
       if (error) return { data: { discount_percent: 0 } };
       return { data: { discount_percent: parseFloat(data.value) || 0 } };
     }
@@ -93,11 +93,17 @@ const apiClient = {
 
     if (path.includes('/api/public/settings/') || path.includes('/api/settings/')) {
       const key = path.split('/').pop();
-      const { data, error } = await supabase.from('settings').select('value').eq('key', key).single();
+      const { data, error } = await supabase.from('settings').select('value').eq('key', key).maybeSingle();
       if (error) return { data: {} };
       return { data: data?.value || {} };
     }
     
+    if (path.includes('/api/public/paypal/client-id')) {
+      const { data, error } = await supabase.from('settings').select('value').eq('key', 'paypal_client_id').maybeSingle();
+      if (error || !data) return { data: { client_id: '' } };
+      return { data: { client_id: data.value } };
+    }
+
     console.warn('Unhandled GET', path);
     return { data: null };
   },
