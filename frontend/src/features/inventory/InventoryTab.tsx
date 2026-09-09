@@ -262,9 +262,9 @@ export const InventoryTab: React.FC<InventoryTabProps> = ({
       category: productCategory,
       description: productDescription,
       image_url: finalImageUrl,
-      discountPercent: productDiscountPercent === '' ? null : productDiscountPercent,
-      variantLabel1: productVariantLabel1,
-      variantLabel2: productVariantLabel2,
+      discount_percent: productDiscountPercent === '' ? null : productDiscountPercent,
+      variant_label_1: productVariantLabel1,
+      variant_label_2: productVariantLabel2,
       variants: productVariants
     };
 
