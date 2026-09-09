@@ -365,11 +365,13 @@ const apiClient = {
     }
 
     if (path.includes('/api/users') && !path.includes('/profile')) {
+      const allowed = (!data.allowed_projects || data.allowed_projects === 'all' || data.allowed_projects === '') ? 'Alla' : data.allowed_projects;
+      
       // 1. Insert into public.users FIRST while we are still logged in as admin!
       const { data: res, error } = await supabase.from('users').insert({
         email: data.email,
         role: data.role,
-        allowed_projects: data.allowed_projects || ''
+        allowed_projects: allowed
       }).select().single();
       if (error) throw error;
 
@@ -419,6 +421,17 @@ const apiClient = {
         if (vErr) throw vErr;
       }
       return { data: { success: true } };
+    }
+
+    if (path.includes('/api/users/')) {
+      const id = path.split('/').pop();
+      const allowed = (!data.allowed_projects || data.allowed_projects === 'all' || data.allowed_projects === '') ? 'Alla' : data.allowed_projects;
+      const { data: res, error } = await supabase.from('users').update({
+        role: data.role,
+        allowed_projects: allowed
+      }).eq('id', id).select().single();
+      if (error) throw error;
+      return { data: res };
     }
 
     console.warn('Unhandled PUT', path);
