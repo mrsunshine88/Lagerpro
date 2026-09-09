@@ -273,9 +273,9 @@ const apiClient = {
             color: v.color || '',
             stock: v.stock || 0,
             sku: sku,
-            purchase_price: v.purchase_price || v.purchasePrice || 0,
-            selling_price: v.selling_price || v.sellingPrice || 0,
-            original_price: v.original_price || v.originalPrice || 0,
+            purchase_price: v.purchase_price ?? v.purchasePrice ?? 0,
+            selling_price: v.selling_price ?? v.sellingPrice ?? 0,
+            original_price: v.original_price ?? v.originalPrice ?? 0,
             image_url: v.image_url || v.imageUrl || null
           };
         });
@@ -385,9 +385,9 @@ const apiClient = {
             color: v.color || '',
             stock: v.stock || 0,
             sku: sku,
-            purchase_price: v.purchase_price || v.purchasePrice || 0,
-            selling_price: v.selling_price || v.sellingPrice || 0,
-            original_price: v.original_price || v.originalPrice || 0,
+            purchase_price: v.purchase_price ?? v.purchasePrice ?? 0,
+            selling_price: v.selling_price ?? v.sellingPrice ?? 0,
+            original_price: v.original_price ?? v.originalPrice ?? 0,
             image_url: v.image_url || v.imageUrl || null
           };
         });
