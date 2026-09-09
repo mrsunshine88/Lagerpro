@@ -271,21 +271,20 @@ export default function App() {
       // Fetch public swish info for POS
       axios.get(`${API_BASE_URL}/api/public/settings/swish-info`).then(res => {
         if (res.data && res.data.merchant_id) {
-          
-      axios.get(`${API_BASE_URL}/api/settings/shipping`, { headers: { Authorization: `Bearer ${t}` } }).then(res => {
+          setSwishMerchantId(res.data.merchant_id);
+        }
+      }).catch(() => {});
+
+      axios.get(`${API_BASE_URL}/api/settings/shipping`, { headers: { Authorization: `Bearer ${token}` } }).then(res => {
         setShippingProvider(res.data.provider);
         setShippingPostnordKey(res.data.postnord_key);
         setShippingDhlKey(res.data.dhl_key);
         setShippingDhlAccount(res.data.dhl_account);
       }).catch(() => {});
 
-      axios.get(`${API_BASE_URL}/api/settings/storefront`, { headers: { Authorization: `Bearer ${t}` } }).then(res => {
+      axios.get(`${API_BASE_URL}/api/settings/storefront`, { headers: { Authorization: `Bearer ${token}` } }).then(res => {
         setStorefrontCompany(res.data.company_name);
         setStorefrontBanner(res.data.banner_url);
-      }).catch(() => {});
-
-        setSwishMerchantId(res.data.merchant_id);
-        }
       }).catch(() => {});
 
       if (userProfile.role === 'admin') {
