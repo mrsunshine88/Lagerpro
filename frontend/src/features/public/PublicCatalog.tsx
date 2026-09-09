@@ -588,8 +588,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                 </div>
               )}
             </div>
-            <div className="pdp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', minHeight: 500 }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap' }}>
                 {/* Image Gallery Side */}
                 <div className="pdp-image-container" style={{ flex: '1 1 500px', minWidth: 300, background: 'rgba(0,0,0,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
                   {selectedPDPProduct.variants && selectedPDPProduct.variants.find((v:any) => v.id === pdpSelectedVariantId)?.image_url ? (
