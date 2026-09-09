@@ -1080,7 +1080,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                           </div>
                           <div style={{ fontSize: '0.8rem', color: '#1e293b', fontFamily: 'Arial, sans-serif', marginBottom: 4 }}>
                             <strong>Leverans:</strong>{' '}
-                            {checkoutDeliveryMethod === 'shipping' ? 'PostNord Hemleverans' : 'Hämtas i butik'}
+                            {checkoutDeliveryMethod === 'shipping' ? 'PostNord till ombud' : 'Hämtas i butik'}
                           </div>
                           {checkoutDeliveryMethod === 'shipping' && checkoutShippingAddress && (
                             <div style={{ fontSize: '0.75rem', color: '#64748b', fontFamily: 'Arial, sans-serif', marginBottom: 4 }}>
@@ -1378,7 +1378,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
                               {config.delivery_method === 'shipping' ? (
                                 <>
                                   <Truck style={{ width: 16, height: 16, color: '#60a5fa' }} />
-                                  <span>PostNord Hemleverans ({isFreeShippingApplied ? 'Fri frakt' : `+${config.shipping_cost} kr`})</span>
+                                  <span>PostNord till ombud ({isFreeShippingApplied ? 'Fri frakt' : `+${config.shipping_cost} kr`})</span>
                                 </>
                               ) : (
                                 <>
@@ -1502,7 +1502,7 @@ export const PublicCatalog: React.FC<PublicCatalogProps> = ({
 
                             {hasShipping && checkoutDeliveryMethod === 'shipping' && (
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, color: '#60a5fa' }}>
-                                <span style={{ flexShrink: 0 }}>PostNord Hemleverans:</span>
+                                <span style={{ flexShrink: 0 }}>PostNord till ombud:</span>
                                 <span style={{ flexShrink: 0 }}>{isFreeShippingApplied ? '0 kr (Fri frakt)' : `+${config.shipping_cost} kr`}</span>
                               </div>
                             )}

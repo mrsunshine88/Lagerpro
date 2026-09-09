@@ -1548,7 +1548,7 @@ export default function App() {
                                     }}
                                     style={{ width: 16, height: 16, accentColor: 'var(--color-primary)', cursor: 'pointer' }}
                                   />
-                                  <span>PostNord hemleverans</span>
+                                  <span>PostNord till ombud</span>
                                 </label>
                               </div>
                             </div>
@@ -1569,7 +1569,7 @@ export default function App() {
 
                           {(settingDeliveryMethod === 'shipping' || settingDeliveryMethod === 'shipping_pickup') && (
                             <div className="input-container" style={{ marginBottom: 15 }}>
-                              <label>Fraktavgift vid hemleverans (kr)</label>
+                              <label>Fraktavgift vid ombud (kr)</label>
                               <input
                                 type="number"
                                 min="0"
